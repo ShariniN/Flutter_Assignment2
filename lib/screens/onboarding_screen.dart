@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '/models/onboarding_model.dart';
 import '/widgets/onboarding.dart';
-import 'authentication.dart';
+import 'login.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -92,7 +92,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         onPressed: () {
                           Navigator.pushReplacement(
                             context,
-                            MaterialPageRoute(builder: (context) => const AuthScreen()),
+                            MaterialPageRoute(builder: (context) => AuthScreen()),
                           );
                         },
                         child: Text(
@@ -107,7 +107,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           if (currentIndex == onboardingItems.length - 1) {
                             Navigator.pushReplacement(
                               context,
-                              MaterialPageRoute(builder: (context) => const AuthScreen()),
+                              MaterialPageRoute(builder: (context) => AuthScreen()),
                             );
                           } else {
                             setState(() {

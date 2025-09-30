@@ -1,9 +1,12 @@
-import 'package:assignment1/screens/profile.dart';
-import 'package:assignment1/screens/electronics_store.dart';
 import 'package:flutter/material.dart';
-import '/screens/category_page.dart';
-import '/screens/cart_screen.dart';
-import '/data/product_data.dart';
+import '../models/category.dart';
+import '../models/product.dart';
+import '../services/api_service.dart';
+import '../services/cart_manager.dart';
+import '../screens/category_screen.dart';
+import '../screens/cart_screen.dart';
+import '../screens/home_screen.dart';
+import '../screens/profile_screen.dart';
 
 class NavigationLayout extends StatefulWidget {
   final Widget body;
@@ -13,6 +16,7 @@ class NavigationLayout extends StatefulWidget {
   final bool showBackButton;
   final VoidCallback? onBackPressed;
   final List<Widget>? additionalActions;
+  final CartManager cartManager;
 
   const NavigationLayout({
     Key? key,
@@ -23,6 +27,7 @@ class NavigationLayout extends StatefulWidget {
     this.showBackButton = false,
     this.onBackPressed,
     this.additionalActions,
+    required this.cartManager,
   }) : super(key: key);
 
   @override
@@ -31,19 +36,12 @@ class NavigationLayout extends StatefulWidget {
 
 class _NavigationLayoutState extends State<NavigationLayout> {
   late int _currentIndex;
+  final ApiService _apiService = ApiService();
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.currentIndex;
-  }
-
-  @override
-  void didUpdateWidget(NavigationLayout oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentIndex != widget.currentIndex) {
-      _currentIndex = widget.currentIndex;
-    }
   }
 
   void _onTabChanged(int index) {
@@ -80,26 +78,48 @@ class _NavigationLayoutState extends State<NavigationLayout> {
     if (ModalRoute.of(context)?.settings.name != '/electronics_store') {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => ElectronicsStore()),
+        MaterialPageRoute(
+          builder: (context) => HomeScreen(),
+        ),
         (route) => false,
       );
     }
   }
 
-  void _showCategoriesBottomSheet() {
+  void _showCategoriesBottomSheet() async {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _buildCategoriesSheet(),
+      builder: (context) => FutureBuilder<List<Category>>(
+        future: _apiService.getCategories(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return SizedBox(
+              height: 300,
+              child: Center(child: CircularProgressIndicator()),
+            );
+          } else if (snapshot.hasError) {
+            return SizedBox(
+              height: 300,
+              child: Center(child: Text('Failed to load categories')),
+            );
+          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return SizedBox(
+              height: 300,
+              child: Center(child: Text('No categories found')),
+            );
+          }
+          final categories = snapshot.data!;
+          return _buildCategoriesSheet(categories);
+        },
+      ),
     );
   }
 
-  Widget _buildCategoriesSheet() {
+  Widget _buildCategoriesSheet(List<Category> categories) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final categoryNames = ProductData.getCategoryDisplayNames();
-    final categoryIcons = ProductData.getCategoryIcons();
-    
+
     return Container(
       height: MediaQuery.of(context).size.height * 0.7,
       decoration: BoxDecoration(
@@ -134,17 +154,8 @@ class _NavigationLayoutState extends State<NavigationLayout> {
               padding: EdgeInsets.all(16),
               mainAxisSpacing: 16,
               crossAxisSpacing: 16,
-              children: categoryNames.entries.map((entry) {
-                final categoryType = entry.key;
-                final displayName = entry.value;
-                final icon = categoryIcons[categoryType] ?? Icons.category;
-                
-                return _buildCategoryItem(
-                  displayName, 
-                  icon, 
-                  isDark, 
-                  categoryType
-                );
+              children: categories.map((category) {
+                return _buildCategoryItem(category, isDark);
               }).toList(),
             ),
           ),
@@ -153,11 +164,11 @@ class _NavigationLayoutState extends State<NavigationLayout> {
     );
   }
 
-  Widget _buildCategoryItem(String title, IconData icon, bool isDark, String categoryType) {
+  Widget _buildCategoryItem(Category category, bool isDark) {
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         Navigator.pop(context);
-        _navigateToCategory(categoryType);
+        await _navigateToCategory(category);
       },
       child: Container(
         decoration: BoxDecoration(
@@ -168,11 +179,7 @@ class _NavigationLayoutState extends State<NavigationLayout> {
           ),
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
-            BoxShadow(
-              color: Color(0xFF5A5CE6), 
-              blurRadius: 1,
-              
-            ),
+            BoxShadow(color: Color(0xFF5A5CE6), blurRadius: 1),
           ],
         ),
         child: Container(
@@ -195,14 +202,14 @@ class _NavigationLayoutState extends State<NavigationLayout> {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  icon,
+                  Icons.category,
                   size: 28,
                   color: Colors.white,
                 ),
               ),
               SizedBox(height: 12),
               Text(
-                title,
+                category.name,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -217,27 +224,30 @@ class _NavigationLayoutState extends State<NavigationLayout> {
     );
   }
 
-  void _navigateToCategory(String categoryType) {
-    final products = ProductData.getProductsByCategory(categoryType);
-    final displayName = ProductData.getCategoryDisplayNames()[categoryType] ?? 'Products';
-    
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CategoryPage(
-          categoryType: categoryType,
-          categoryName: displayName,
-          products: products,
+  Future<void> _navigateToCategory(Category category) async {
+    try {
+      final products = await _apiService.getProductsByCategory(category.id);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CategoryScreen(
+            categoryName: category.name,
+            categoryId: category.id,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load products: $e')),
+      );
+    }
   }
 
   void _navigateToCart() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => CartPage(),
+        builder: (context) => CartScreen(cartManager: widget.cartManager),
       ),
     );
   }
@@ -254,7 +264,7 @@ class _NavigationLayoutState extends State<NavigationLayout> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -278,65 +288,39 @@ class _NavigationLayoutState extends State<NavigationLayout> {
           ),
         ),
         centerTitle: widget.showBackButton,
-        actions: [
-          IconButton(
-            icon: Icon(
-              Icons.search,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: Icon(
-              Icons.shopping_bag_outlined,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-            onPressed: _navigateToCart,
-          ),
-        ],
+        actions: widget.additionalActions,
       ),
       body: widget.body,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black,
-              blurRadius: 10,
-              offset: Offset(0, -2),
-            ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: _onTabChanged,
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: isDark ? Colors.grey[900] : Colors.white,
-          selectedItemColor: Color(0xFF5A5CE6),
-          unselectedItemColor: isDark ? Colors.grey[400] : Colors.grey[600],
-          elevation: 0,
-          items: [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
-              label: 'Home',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.category_outlined),
-              activeIcon: Icon(Icons.category),
-              label: 'Categories',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.shopping_cart_outlined),
-              activeIcon: Icon(Icons.shopping_cart),
-              label: 'Cart',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Profile',
-            ),
-          ],
-        ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: _onTabChanged,
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: isDark ? Colors.grey[900] : Colors.white,
+        selectedItemColor: Color(0xFF5A5CE6),
+        unselectedItemColor: isDark ? Colors.grey[400] : Colors.grey[600],
+        elevation: 0,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.category_outlined),
+            activeIcon: Icon(Icons.category),
+            label: 'Categories',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.shopping_cart_outlined),
+            activeIcon: Icon(Icons.shopping_cart),
+            label: 'Cart',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ],
       ),
     );
   }

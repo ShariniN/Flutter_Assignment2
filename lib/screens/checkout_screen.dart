@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '/models/cart.dart';
+import '/services/cart_manager.dart';
 
 class CheckoutPage extends StatefulWidget {
-  const CheckoutPage({Key? key}) : super(key: key);
+  final CartManager cartManager;
+
+  const CheckoutPage({Key? key, required this.cartManager}) : super(key: key);
 
   @override
   State<CheckoutPage> createState() => _CheckoutPageState();
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
-  final CartManager _cartManager = CartManager();
+  late CartManager _cartManager;
   final _formKey = GlobalKey<FormState>();
-  
+
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _addressController = TextEditingController();
@@ -22,6 +25,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
   final _cardHolderController = TextEditingController();
 
   bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cartManager = widget.cartManager;
+  }
 
   @override
   void dispose() {
@@ -42,7 +51,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
@@ -98,9 +107,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ),
           ),
           const SizedBox(height: 16),
-          
           ...List.generate(_cartManager.items.length, (index) {
             final item = _cartManager.items[index];
+            final product = item.product!;
+            final price = product.discountPrice ?? product.price;
+
             return Padding(
               padding: EdgeInsets.only(bottom: index < _cartManager.items.length - 1 ? 12 : 0),
               child: Row(
@@ -112,21 +123,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       color: theme.brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[100],
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: item.product.imageUrl.isNotEmpty
+                    child: product.image != null && product.image!.isNotEmpty
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: Image.network(
-                              item.product.imageUrl,
+                              product.image!,
                               width: 50,
                               height: 50,
                               fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Icon(
-                                  Icons.image_not_supported,
-                                  color: theme.brightness == Brightness.dark ? Colors.grey[600] : Colors.grey[400],
-                                  size: 20,
-                                );
-                              },
+                              errorBuilder: (_, __, ___) => Icon(
+                                Icons.image_not_supported,
+                                color: theme.brightness == Brightness.dark ? Colors.grey[600] : Colors.grey[400],
+                                size: 20,
+                              ),
                             ),
                           )
                         : Icon(
@@ -136,29 +145,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           ),
                   ),
                   const SizedBox(width: 12),
-                  
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          item.product.title,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
-                          ),
+                          product.name,
+                          style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          '${item.selectedColor} • ${item.selectedVariant}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.brightness == Brightness.dark ? Colors.grey[400] : Colors.grey[600],
-                          ),
                         ),
                       ],
                     ),
                   ),
-                  
                   Text(
                     'x${item.quantity}',
                     style: theme.textTheme.bodyMedium?.copyWith(
@@ -167,34 +166,26 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'LKR ${(item.price * item.quantity).toStringAsFixed(2)}',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                    'LKR ${(price * item.quantity).toStringAsFixed(2)}',
+                    style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
             );
           }),
-          
           const SizedBox(height: 16),
           const Divider(),
           const SizedBox(height: 8),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 'Total (${_cartManager.itemCount} items)',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
               ),
               Text(
                 'LKR ${_cartManager.totalAmount.toStringAsFixed(2)}',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -219,106 +210,62 @@ class _CheckoutPageState extends State<CheckoutPage> {
         children: [
           Text(
             'Payment Method',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 16),
-          
           TextFormField(
             controller: _cardHolderController,
             decoration: InputDecoration(
               labelText: 'Cardholder Name',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               prefixIcon: const Icon(Icons.person),
             ),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
-            ],
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]'))],
             validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter cardholder name';
-              }
-              if (value.trim().length < 2) {
-                return 'Name must be at least 2 characters';
-              }
+              if (value == null || value.trim().isEmpty) return 'Please enter cardholder name';
+              if (value.trim().length < 2) return 'Name must be at least 2 characters';
               return null;
             },
           ),
           const SizedBox(height: 16),
-          
           TextFormField(
             controller: _cardNumberController,
             decoration: InputDecoration(
               labelText: 'Card Number',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               prefixIcon: const Icon(Icons.credit_card),
               hintText: '1234567890123456',
             ),
             keyboardType: TextInputType.number,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(16),
-            ],
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(16)],
             validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please enter card number';
-              }
-              if (value.length != 16) {
-                return 'Card number must be 16 digits';
-              }
+              if (value == null || value.isEmpty) return 'Please enter card number';
+              if (value.length != 16) return 'Card number must be 16 digits';
               return null;
             },
           ),
           const SizedBox(height: 16),
-          
           Row(
             children: [
               Expanded(
-                child:TextFormField(
+                child: TextFormField(
                   controller: _expiryController,
                   decoration: InputDecoration(
                     labelText: 'MM/YY',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     prefixIcon: const Icon(Icons.calendar_today),
                     hintText: '12/25',
                   ),
                   keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(4),
-                    _ExpiryDateFormatter(),
-                  ],
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(4), _ExpiryDateFormatter()],
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Required';
-                    }
-                    if (value.length != 5 || !value.contains('/')) {
-                      return 'Format: MM/YY';
-                    }
-                    
+                    if (value == null || value.isEmpty) return 'Required';
+                    if (value.length != 5 || !value.contains('/')) return 'Format: MM/YY';
                     final parts = value.split('/');
-                    if (parts.length != 2) {
-                      return 'Format: MM/YY';
-                    }
-                    
                     final month = int.tryParse(parts[0]);
                     final year = int.tryParse(parts[1]);
-                    
-                    if (month == null || month < 1 || month > 12) {
-                      return 'Invalid month';
-                    }
-                    
-                    if (year == null) {
-                      return 'Invalid year';
-                    }
-                    
+                    if (month == null || month < 1 || month > 12) return 'Invalid month';
+                    if (year == null) return 'Invalid year';
                     return null;
                   },
                 ),
@@ -329,24 +276,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   controller: _cvvController,
                   decoration: InputDecoration(
                     labelText: 'CVV',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     prefixIcon: const Icon(Icons.lock),
                     hintText: '123',
                   ),
                   keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(3),
-                  ],
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Required';
-                    }
-                    if (value.length != 3) {
-                      return 'Must be 3 digits';
-                    }
+                    if (value == null || value.isEmpty) return 'Required';
+                    if (value.length != 3) return 'Must be 3 digits';
                     return null;
                   },
                 ),
@@ -365,83 +303,40 @@ class _CheckoutPageState extends State<CheckoutPage> {
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: theme.brightness == Brightness.dark ? Colors.grey[800]! : Colors.grey[200]!,
-        ),
+        border: Border.all(color: theme.brightness == Brightness.dark ? Colors.grey[800]! : Colors.grey[200]!),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Delivery Details',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text('Delivery Details', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
-          
           TextFormField(
             controller: _nameController,
-            decoration: InputDecoration(
-              labelText: 'Full Name',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              prefixIcon: const Icon(Icons.person),
-            ),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]')),
-            ],
+            decoration: InputDecoration(labelText: 'Full Name', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), prefixIcon: const Icon(Icons.person)),
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z\s]'))],
             validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter your full name';
-              }
-              if (value.trim().length < 2) {
-                return 'Name must be at least 2 characters';
-              }
+              if (value == null || value.trim().isEmpty) return 'Please enter your full name';
+              if (value.trim().length < 2) return 'Name must be at least 2 characters';
               return null;
             },
           ),
           const SizedBox(height: 16),
-          
           TextFormField(
             controller: _emailController,
-            decoration: InputDecoration(
-              labelText: 'Email',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              prefixIcon: const Icon(Icons.email),
-            ),
+            decoration: InputDecoration(labelText: 'Email', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), prefixIcon: const Icon(Icons.email)),
             keyboardType: TextInputType.emailAddress,
             validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter your email';
-              }
-              if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(value.trim())) {
-                return 'Please enter a valid email';
-              }
+              if (value == null || value.trim().isEmpty) return 'Please enter your email';
+              if (!RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(value.trim())) return 'Please enter a valid email';
               return null;
             },
           ),
           const SizedBox(height: 16),
-          
           TextFormField(
             controller: _addressController,
-            decoration: InputDecoration(
-              labelText: 'Delivery Address',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              prefixIcon: const Icon(Icons.home),
-            ),
+            decoration: InputDecoration(labelText: 'Delivery Address', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), prefixIcon: const Icon(Icons.home)),
             maxLines: 2,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter your delivery address';
-              }
-              return null;
-            },
+            validator: (value) => (value == null || value.trim().isEmpty) ? 'Please enter your delivery address' : null,
           ),
         ],
       ),
@@ -459,40 +354,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
             backgroundColor: theme.brightness == Brightness.dark ? Colors.white : Colors.black,
             disabledBackgroundColor: theme.brightness == Brightness.dark ? Colors.grey[700] : Colors.grey[300],
             padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           child: _isProcessing
               ? Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: theme.brightness == Brightness.dark ? Colors.black : Colors.white,
-                      ),
-                    ),
+                    SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: theme.brightness == Brightness.dark ? Colors.black : Colors.white)),
                     const SizedBox(width: 12),
-                    Text(
-                      'Processing...',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: theme.brightness == Brightness.dark ? Colors.black : Colors.white,
-                      ),
-                    ),
+                    Text('Processing...', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: theme.brightness == Brightness.dark ? Colors.black : Colors.white)),
                   ],
                 )
               : Text(
                   'Place Order • LKR ${_cartManager.totalAmount.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: theme.brightness == Brightness.dark ? Colors.black : Colors.white,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: theme.brightness == Brightness.dark ? Colors.black : Colors.white),
                 ),
         ),
       ),
@@ -501,17 +376,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   void _placeOrder() async {
     if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isProcessing = true;
-      });
+      setState(() => _isProcessing = true);
 
-      await Future.delayed(const Duration(seconds: 2));
-
-      setState(() {
-        _isProcessing = false;
-      });
+      await Future.delayed(const Duration(seconds: 2)); // simulate API call
 
       _cartManager.clearCart();
+
+      setState(() => _isProcessing = false);
 
       _showSuccessDialog();
     }
@@ -519,70 +390,37 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   void _showSuccessDialog() {
     final theme = Theme.of(context);
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
           backgroundColor: theme.brightness == Brightness.dark ? Colors.grey[900] : Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: const BoxDecoration(
-                  color: Colors.green,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check,
-                  color: Colors.white,
-                  size: 40,
-                ),
-              ),
+              Container(width: 80, height: 80, decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle), child: const Icon(Icons.check, color: Colors.white, size: 40)),
               const SizedBox(height: 24),
-              Text(
-                'Order Placed Successfully!',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-              ),
+              Text('Order Placed Successfully!', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600), textAlign: TextAlign.center),
               const SizedBox(height: 12),
-              Text(
-                'Thank you for your purchase. You will receive your delivery details soon.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.brightness == Brightness.dark ? Colors.grey[400] : Colors.grey[600],
-                ),
-                textAlign: TextAlign.center,
-              ),
+              Text('Thank you for your purchase. You will receive your delivery details soon.',
+                  style: theme.textTheme.bodyMedium?.copyWith(color: theme.brightness == Brightness.dark ? Colors.grey[400] : Colors.grey[600]), textAlign: TextAlign.center),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.of(context).pop(); 
+                    Navigator.of(context).pop();
                     Navigator.of(context).pop();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: theme.brightness == Brightness.dark ? Colors.white : Colors.black,
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: Text(
-                    'Continue Shopping',
-                    style: TextStyle(
-                      color: theme.brightness == Brightness.dark ? Colors.black : Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: Text('Continue Shopping', style: TextStyle(color: theme.brightness == Brightness.dark ? Colors.black : Colors.white, fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
@@ -591,28 +429,18 @@ class _CheckoutPageState extends State<CheckoutPage> {
       },
     );
   }
-
 }
 
 class _ExpiryDateFormatter extends TextInputFormatter {
   @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
     final text = newValue.text.replaceAll('/', '');
-    
     if (text.length >= 2) {
       final month = text.substring(0, 2);
       final year = text.length > 2 ? text.substring(2) : '';
       final formattedText = year.isEmpty ? '$month/' : '$month/$year';
-      
-      return TextEditingValue(
-        text: formattedText,
-        selection: TextSelection.collapsed(offset: formattedText.length),
-      );
+      return TextEditingValue(text: formattedText, selection: TextSelection.collapsed(offset: formattedText.length));
     }
-    
     return newValue;
   }
 }

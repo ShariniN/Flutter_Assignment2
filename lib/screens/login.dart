@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:assignment1/services/api_service.dart';
+import 'package:assignment1/models/user.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'home_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   @override
@@ -6,8 +10,6 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  bool isLogin = true;
-
   final _loginFormKey = GlobalKey<FormState>();
   final _registerFormKey = GlobalKey<FormState>();
 
@@ -17,195 +19,154 @@ class _AuthScreenState extends State<AuthScreen> {
   final _registerNameController = TextEditingController();
   final _registerEmailController = TextEditingController();
   final _registerPasswordController = TextEditingController();
-  final _registerConfirmPasswordController = TextEditingController();
 
-  bool _obscurePassword = true;
-  bool _obscureConfirmPassword = true;
+  bool _isLogin = true;
+  bool _loading = false;
 
-  @override
-  void dispose() {
-    _loginEmailController.dispose();
-    _loginPasswordController.dispose();
-    _registerNameController.dispose();
-    _registerEmailController.dispose();
-    _registerPasswordController.dispose();
-    _registerConfirmPasswordController.dispose();
-    super.dispose();
+  final ApiService _apiService = ApiService();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
-  void toggleAuthMode() {
-    setState(() {
-      isLogin = !isLogin;
-    });
+  Future<void> _handleLogin() async {
+    if (_loginFormKey.currentState!.validate()) {
+      setState(() => _loading = true);
+      try {
+        User user = await _apiService.login(
+          _loginEmailController.text.trim(),
+          _loginPasswordController.text.trim(),
+        );
+
+        // Save token securely
+        if (user.token != null) {
+          await _secureStorage.write(key: 'auth_token', value: user.token);
+        }
+
+        _showMessage("Welcome back, ${user.name}!");
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => HomeScreen()),
+        );
+      } catch (e) {
+        _showMessage("Login failed: $e");
+      } finally {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _handleRegister() async {
+    if (_registerFormKey.currentState!.validate()) {
+      setState(() => _loading = true);
+      try {
+        User user = await _apiService.register(
+          _registerNameController.text.trim(),
+          _registerEmailController.text.trim(),
+          _registerPasswordController.text.trim(),
+        );
+
+        // Save token securely
+        if (user.token != null) {
+          await _secureStorage.write(key: 'auth_token', value: user.token);
+        }
+
+        _showMessage("Account created! Welcome, ${user.name}!");
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => HomeScreen()),
+        );
+      } catch (e) {
+        _showMessage("Registration failed: $e");
+      } finally {
+        setState(() => _loading = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
-      body: Container(
-        padding: EdgeInsets.only(top: 50),
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Column(
-              children: [
-                SizedBox(height: 40),
-                Column(
+      body: SafeArea(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                   children: [
-                    Container(
-                      height: 80,
-                      width: 80,
-                      decoration: BoxDecoration(
-                        color: theme.primaryColor,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Icon(
-                        Icons.shopping_cart,
-                        color: Colors.white,
-                        size: 40,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        TextButton(
+                          onPressed: () => setState(() => _isLogin = true),
+                          child: Text(
+                            "Login",
+                            style: TextStyle(
+                              fontWeight: _isLogin ? FontWeight.bold : FontWeight.normal,
+                              color: _isLogin ? theme.primaryColor : Colors.grey,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => setState(() => _isLogin = false),
+                          child: Text(
+                            "Register",
+                            style: TextStyle(
+                              fontWeight: !_isLogin ? FontWeight.bold : FontWeight.normal,
+                              color: !_isLogin ? theme.primaryColor : Colors.grey,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: _isLogin
+                            ? _buildLoginForm(theme)
+                            : _buildRegisterForm(theme),
                       ),
                     ),
-                    SizedBox(height: 16),
-                    Text(
-                      "TechStore",
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.bodyLarge?.color,
-                      ),
-                    ),
-                    SizedBox(height: 8),
                   ],
                 ),
-                SizedBox(height: 50),
-                
-                Container(
-                  decoration: BoxDecoration(
-                    color: theme.cardColor,
-                    borderRadius: BorderRadius.circular(25),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            if (!isLogin) toggleAuthMode();
-                          },
-                          child: Container(
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            decoration: BoxDecoration(
-                              color: isLogin ? theme.primaryColor : Colors.transparent,
-                              borderRadius: BorderRadius.circular(25),
-                            ),
-                            child: Text(
-                              "Login",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: isLogin ? Colors.white : theme.textTheme.bodyMedium?.color,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            if (isLogin) toggleAuthMode();
-                          },
-                          child: Container(
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            decoration: BoxDecoration(
-                              color: !isLogin ? theme.primaryColor : Colors.transparent,
-                              borderRadius: BorderRadius.circular(25),
-                            ),
-                            child: Text(
-                              "Register",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: !isLogin ? Colors.white : theme.textTheme.bodyMedium?.color,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: 30),
-
-                isLogin ? _buildLoginForm() : _buildRegisterForm(),
-              ],
-            ),
-          ),
-        ),
+              ),
       ),
     );
   }
 
-  Widget _buildLoginForm() {
-    final theme = Theme.of(context);
-    
+  Widget _buildLoginForm(ThemeData theme) {
     return Form(
       key: _loginFormKey,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildTextField(
+          TextFormField(
             controller: _loginEmailController,
-            label: "Email",
-            icon: Icons.email_outlined,
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please enter your email';
-              }
-              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                return 'Please enter a valid email';
-              }
-              return null;
-            },
+            decoration: const InputDecoration(labelText: "Email"),
+            validator: (value) => value!.isEmpty ? "Enter email" : null,
           ),
-          SizedBox(height: 16),
-          _buildTextField(
+          const SizedBox(height: 16),
+          TextFormField(
             controller: _loginPasswordController,
-            label: "Password",
-            icon: Icons.lock_outline,
-            obscureText: _obscurePassword,
-            suffixIcon: IconButton(
-              icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
-              onPressed: () {
-                setState(() {
-                  _obscurePassword = !_obscurePassword;
-                });
-              },
-            ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please enter your password';
-              }
-              return null;
-            },
+            decoration: const InputDecoration(labelText: "Password"),
+            obscureText: true,
+            validator: (value) => value!.isEmpty ? "Enter password" : null,
           ),
-          SizedBox(height: 24),
+          const SizedBox(height: 24),
           ElevatedButton(
-            onPressed: () {
-              if (_loginFormKey.currentState!.validate()) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Login successful!')),
-                );
-              }
-            },
+            onPressed: _handleLogin,
             style: ElevatedButton.styleFrom(
               backgroundColor: theme.primaryColor,
-              padding: EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: Text(
+            child: const Text(
               "Login",
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
             ),
@@ -215,153 +176,43 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  Widget _buildRegisterForm() {
-    final theme = Theme.of(context);
-    
-    List<Widget> formFields = [
-      _buildTextField(
-        controller: _registerNameController,
-        label: "Full Name",
-        icon: Icons.person_outline,
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter your full name';
-          }
-          return null;
-        },
-      ),
-      SizedBox(height: 16),
-      _buildTextField(
-        controller: _registerEmailController,
-        label: "Email",
-        icon: Icons.email_outlined,
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter your email';
-          }
-          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-            return 'Please enter a valid email';
-          }
-          return null;
-        },
-      ),
-      SizedBox(height: 16),
-      _buildTextField(
-        controller: _registerPasswordController,
-        label: "Password",
-        icon: Icons.lock_outline,
-        obscureText: _obscurePassword,
-        suffixIcon: IconButton(
-          icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
-          onPressed: () {
-            setState(() {
-              _obscurePassword = !_obscurePassword;
-            });
-          },
-        ),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter a password';
-          }
-          if (value.length < 6) {
-            return 'Password must be at least 6 characters';
-          }
-          return null;
-        },
-      ),
-      SizedBox(height: 16),
-      _buildTextField(
-        controller: _registerConfirmPasswordController,
-        label: "Confirm Password",
-        icon: Icons.lock_outline,
-        obscureText: _obscureConfirmPassword,
-        suffixIcon: IconButton(
-          icon: Icon(_obscureConfirmPassword ? Icons.visibility : Icons.visibility_off),
-          onPressed: () {
-            setState(() {
-              _obscureConfirmPassword = !_obscureConfirmPassword;
-            });
-          },
-        ),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please confirm your password';
-          }
-          if (value != _registerPasswordController.text) {
-            return 'Passwords do not match';
-          }
-          return null;
-        },
-      ),
-      SizedBox(height: 24),
-      ElevatedButton(
-        onPressed: () {
-          if (_registerFormKey.currentState!.validate()) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Registration successful!')),
-            );
-          }
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: theme.primaryColor,
-          padding: EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        child: Text(
-          "Create Account",
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
-        ),
-      ),
-    ];
-
+  Widget _buildRegisterForm(ThemeData theme) {
     return Form(
       key: _registerFormKey,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: formFields,
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    bool obscureText = false,
-    Widget? suffixIcon,
-    String? Function(String?)? validator,
-  }) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    
-    return TextFormField(
-      controller: controller,
-      obscureText: obscureText,
-      validator: validator,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        suffixIcon: suffixIcon,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: isDark ? Colors.grey[600]! : Colors.grey[300]!),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: isDark ? Colors.grey[600]! : Colors.grey[300]!),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: theme.primaryColor),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.red),
-        ),
-        filled: true,
-        fillColor: isDark ? Colors.grey[800] : Colors.grey[50],
+        children: [
+          TextFormField(
+            controller: _registerNameController,
+            decoration: const InputDecoration(labelText: "Full Name"),
+            validator: (value) => value!.isEmpty ? "Enter your name" : null,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _registerEmailController,
+            decoration: const InputDecoration(labelText: "Email"),
+            validator: (value) => value!.isEmpty ? "Enter email" : null,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _registerPasswordController,
+            decoration: const InputDecoration(labelText: "Password"),
+            obscureText: true,
+            validator: (value) => value!.isEmpty ? "Enter password" : null,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: _handleRegister,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.primaryColor,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text(
+              "Create Account",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+            ),
+          ),
+        ],
       ),
     );
   }
