@@ -7,7 +7,7 @@ import '../models/wishlist_item.dart';
 import '../models/category.dart';
 
 class ApiService {
-  static const String baseUrl = "http://192.168.8.165:8000/api";
+  static const String baseUrl = "https://ssp2-assignment-production.up.railway.app/api";
   final Dio _dio = Dio();
 
   ApiService() {
@@ -17,7 +17,6 @@ class ApiService {
     _dio.options.connectTimeout = const Duration(seconds: 10);
     _dio.options.receiveTimeout = const Duration(seconds: 10);
 
-    // Interceptor automatically adds token to every request
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         final prefs = await SharedPreferences.getInstance();
@@ -215,20 +214,29 @@ class ApiService {
   // -----------------------------
   // Error handling
   // -----------------------------
-  String _handleError(DioException e) {
-    if (e.response?.data is Map && e.response?.data['message'] != null) {
-      return e.response!.data['message'];
-    }
+ String _handleError(DioException e) {
+  print("⚠️ Dio error type: ${e.type}");
+  print("⚠️ Dio error message: ${e.message}");
+  print("⚠️ Dio error response: ${e.response?.data}");
 
-    switch (e.response?.statusCode) {
-      case 401:
-        return 'Unauthorized. Please login again.';
-      case 500:
-        return 'Server error. Please try again later.';
-      default:
-        return 'An error occurred';
-    }
+  if (e.response?.data is Map && e.response?.data['message'] != null) {
+    return e.response!.data['message'];
   }
+
+  switch (e.type) {
+    case DioExceptionType.connectionTimeout:
+      return "Connection timeout. Check server.";
+    case DioExceptionType.receiveTimeout:
+      return "Receive timeout. Server not responding.";
+    case DioExceptionType.badResponse:
+      return "Bad response: ${e.response?.statusCode}";
+    case DioExceptionType.unknown:
+      return "Unable to connect to server.";
+    default:
+      return "Unexpected error: ${e.message}";
+  }
+}
+
 
   // Add this temporary method to debug categories
 Future<void> debugCategories() async {

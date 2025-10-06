@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '/models/cart.dart';
 import '/services/cart_manager.dart';
+import '/services/location_service.dart';
+import 'package:local_auth/local_auth.dart';
 
 class CheckoutPage extends StatefulWidget {
   final CartManager cartManager;
@@ -23,6 +24,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
   final _expiryController = TextEditingController();
   final _cvvController = TextEditingController();
   final _cardHolderController = TextEditingController();
+  final LocalAuthentication _auth = LocalAuthentication();
+
 
   bool _isProcessing = false;
 
@@ -296,6 +299,28 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
+  Future<bool> _authenticateBiometric() async {
+    try {
+      bool canCheckBiometrics = await _auth.canCheckBiometrics;
+      bool isSupported = await _auth.isDeviceSupported();
+
+      if (!canCheckBiometrics || !isSupported) return false;
+
+      bool didAuthenticate = await _auth.authenticate(
+        localizedReason: 'Please authenticate to confirm your order',
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
+        ),
+      );
+      return didAuthenticate;
+    } catch (e) {
+      print('Biometric auth error: $e');
+      return false;
+    }
+  }
+
+
   Widget _buildDeliveryDetails(ThemeData theme) {
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
@@ -332,6 +357,23 @@ class _CheckoutPageState extends State<CheckoutPage> {
             },
           ),
           const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () async {
+              setState(() => _isProcessing = true);
+              String address = await LocationService().getCurrentAddress();
+              _addressController.text = address;
+              setState(() => _isProcessing = false);
+            },
+            icon: const Icon(Icons.my_location),
+            label: const Text('Use Current Location'),
+            style: ElevatedButton.styleFrom(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[200],
+              foregroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+          const SizedBox(height: 12),
           TextFormField(
             controller: _addressController,
             decoration: InputDecoration(labelText: 'Delivery Address', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), prefixIcon: const Icon(Icons.home)),
@@ -375,17 +417,25 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   void _placeOrder() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isProcessing = true);
+  if (_formKey.currentState!.validate()) {
+    setState(() => _isProcessing = true);
 
-      await Future.delayed(const Duration(seconds: 2)); // simulate API call
-
-      _cartManager.clearCart();
-
+    bool authenticated = await _authenticateBiometric();
+    if (!authenticated) {
       setState(() => _isProcessing = false);
-
-      _showSuccessDialog();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Authentication failed!')),
+      );
+      return;
     }
+
+    await Future.delayed(const Duration(seconds: 2));
+
+    _cartManager.clearCart();
+    setState(() => _isProcessing = false);
+
+    _showSuccessDialog();
+  }
   }
 
   void _showSuccessDialog() {
@@ -433,14 +483,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
 class _ExpiryDateFormatter extends TextInputFormatter {
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
     final text = newValue.text.replaceAll('/', '');
     if (text.length >= 2) {
       final month = text.substring(0, 2);
       final year = text.length > 2 ? text.substring(2) : '';
       final formattedText = year.isEmpty ? '$month/' : '$month/$year';
-      return TextEditingValue(text: formattedText, selection: TextSelection.collapsed(offset: formattedText.length));
+      return TextEditingValue(
+        text: formattedText,
+        selection: TextSelection.collapsed(offset: formattedText.length),
+      );
     }
     return newValue;
   }
 }
+
