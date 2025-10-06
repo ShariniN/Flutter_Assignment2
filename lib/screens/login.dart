@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:assignment1/services/api_service.dart';
 import 'package:assignment1/models/user.dart';
+import 'package:assignment1/services/cart_manager.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:provider/provider.dart';
 import 'home_screen.dart';
+
 
 class AuthScreen extends StatefulWidget {
   @override
@@ -48,6 +51,11 @@ class _AuthScreenState extends State<AuthScreen> {
 
         _showMessage("Welcome back, ${user.name}!");
 
+        // Load cart after successful login
+        if (mounted) {
+          await Provider.of<CartManager>(context, listen: false).loadCart();
+        }
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => HomeScreen()),
@@ -76,6 +84,11 @@ class _AuthScreenState extends State<AuthScreen> {
         }
 
         _showMessage("Account created! Welcome, ${user.name}!");
+
+        // Load cart after successful registration
+        if (mounted) {
+          await Provider.of<CartManager>(context, listen: false).loadCart();
+        }
 
         Navigator.pushReplacement(
           context,

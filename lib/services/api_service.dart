@@ -1,14 +1,16 @@
 import 'package:dio/dio.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/user.dart';
 import '../models/product.dart';
 import '../models/order.dart';
 import '../models/wishlist_item.dart';
 import '../models/category.dart';
+import '../models/cart_item.dart';
 
 class ApiService {
   static const String baseUrl = "https://ssp2-assignment-production.up.railway.app/api";
   final Dio _dio = Dio();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   ApiService() {
     _dio.options.baseUrl = baseUrl;
@@ -19,30 +21,21 @@ class ApiService {
 
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-        final prefs = await SharedPreferences.getInstance();
-        final token = prefs.getString('token');
+        final token = await _secureStorage.read(key: 'auth_token');
         if (token != null) {
           options.headers['Authorization'] = 'Bearer $token';
         }
-        print('🚀 REQUEST[${options.method}] => ${options.path}');
-        print('Headers: ${options.headers}');
-        print('Data: ${options.data}');
         return handler.next(options);
       },
       onResponse: (response, handler) {
-        print('✅ RESPONSE[${response.statusCode}] => ${response.data}');
         return handler.next(response);
       },
       onError: (DioException e, handler) {
-        print('❌ ERROR[${e.response?.statusCode}]: ${e.response?.data}');
         return handler.next(e);
       },
     ));
   }
 
-  // -----------------------------
-  // Auth
-  // -----------------------------
   Future<User> register(String name, String email, String password) async {
     try {
       final response = await _dio.post('/register', data: {
@@ -50,10 +43,7 @@ class ApiService {
         "email": email,
         "password": password,
       });
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('token', response.data['token']);
-
+      await _secureStorage.write(key: 'auth_token', value: response.data['token']);
       return User.fromJson(response.data['user']);
     } on DioException catch (e) {
       throw _handleError(e);
@@ -66,10 +56,7 @@ class ApiService {
         "email": email,
         "password": password,
       });
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('token', response.data['token']);
-
+      await _secureStorage.write(key: 'auth_token', value: response.data['token']);
       return User.fromJson(response.data['user']);
     } on DioException catch (e) {
       throw _handleError(e);
@@ -79,23 +66,15 @@ class ApiService {
   Future<void> logout() async {
     try {
       await _dio.post('/logout');
-    } catch (e) {
-      print('Logout API call failed: $e');
-    } finally {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('token');
+    } catch (e) {} 
+    finally {
+      await _secureStorage.delete(key: 'auth_token');
     }
   }
 
-  // -----------------------------
-  // Products
-  // -----------------------------
   Future<List<Product>> getProducts() async {
     try {
       final response = await _dio.get('/products');
-
-      print('Raw Products JSON: ${response.data}');
-
       return (response.data as List)
           .map((json) => Product.fromJson(json))
           .toList();
@@ -107,30 +86,22 @@ class ApiService {
   Future<Product> getProductDetails(int id) async {
     try {
       final response = await _dio.get('/products/$id');
-      print('Raw Product JSON: ${response.data}');
       return Product.fromJson(response.data);
     } on DioException catch (e) {
       throw _handleError(e);
     }
   }
 
-  // -----------------------------
-  // Categories
-  // -----------------------------
   Future<List<Category>> getCategories() async {
     try {
       final response = await _dio.get('/categories');
-      print('Raw Categories JSON: ${response.data}');
-
       final data = response.data;
       List<dynamic> list;
-
       if (data is Map && data.containsKey('data')) {
         list = data['data'];
       } else {
         list = data;
       }
-
       return list.map((json) => Category.fromJson(json)).toList();
     } on DioException catch (e) {
       throw _handleError(e);
@@ -140,30 +111,22 @@ class ApiService {
   Future<List<Product>> getProductsByCategory(int categoryId) async {
     try {
       final response = await _dio.get('/categories/$categoryId/products');
-      print('Raw Products by Category JSON: ${response.data}');
-
       final data = response.data;
       List<dynamic> list;
-
       if (data is Map && data.containsKey('products')) {
         list = data['products'];
       } else {
         list = data;
       }
-
       return list.map((json) => Product.fromJson(json)).toList();
     } on DioException catch (e) {
       throw _handleError(e);
     }
   }
 
-  // -----------------------------
-  // Wishlist
-  // -----------------------------
   Future<List<WishlistItem>> getWishlist() async {
     try {
       final response = await _dio.get('/wishlist');
-      print('Raw Wishlist JSON: ${response.data}');
       return (response.data as List)
           .map((json) => WishlistItem.fromJson(json))
           .toList();
@@ -188,13 +151,9 @@ class ApiService {
     }
   }
 
-  // -----------------------------
-  // Orders
-  // -----------------------------
   Future<Order> placeOrder(List<int> productIds) async {
     try {
       final response = await _dio.post('/orders', data: {"products": productIds});
-      print('Raw Order JSON: ${response.data}');
       return Order.fromJson(response.data);
     } on DioException catch (e) {
       throw _handleError(e);
@@ -204,65 +163,89 @@ class ApiService {
   Future<List<Order>> getOrders() async {
     try {
       final response = await _dio.get('/orders');
-      print('Raw Orders JSON: ${response.data}');
       return (response.data as List).map((json) => Order.fromJson(json)).toList();
     } on DioException catch (e) {
       throw _handleError(e);
     }
   }
 
-  // -----------------------------
-  // Error handling
-  // -----------------------------
- String _handleError(DioException e) {
-  print("⚠️ Dio error type: ${e.type}");
-  print("⚠️ Dio error message: ${e.message}");
-  print("⚠️ Dio error response: ${e.response?.data}");
-
-  if (e.response?.data is Map && e.response?.data['message'] != null) {
-    return e.response!.data['message'];
-  }
-
-  switch (e.type) {
-    case DioExceptionType.connectionTimeout:
-      return "Connection timeout. Check server.";
-    case DioExceptionType.receiveTimeout:
-      return "Receive timeout. Server not responding.";
-    case DioExceptionType.badResponse:
-      return "Bad response: ${e.response?.statusCode}";
-    case DioExceptionType.unknown:
-      return "Unable to connect to server.";
-    default:
-      return "Unexpected error: ${e.message}";
-  }
-}
-
-
-  // Add this temporary method to debug categories
-Future<void> debugCategories() async {
-  try {
-    print('=== DEBUGGING CATEGORIES ===');
-    final response = await _dio.get('/categories');
-    
-    print('Categories Response Type: ${response.data.runtimeType}');
-    print('Categories Full Response: ${response.data}');
-    
-    if (response.data is List) {
-      print('✅ Categories is a List with ${(response.data as List).length} items');
-      for (int i = 0; i < (response.data as List).length; i++) {
-        print('Item $i: ${(response.data as List)[i]}');
-      }
-    } else if (response.data is Map) {
-      print('✅ Categories is a Map with keys: ${(response.data as Map).keys}');
+    // Get cart items
+  Future<List<CartItem>> getCart() async {
+    try {
+      final response = await _dio.get('/cart');
+      return (response.data as List)
+          .map((json) => CartItem.fromJson(json))
+          .toList();
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
+  }
+
+  Future<CartItem> addToCart(int productId, int quantity) async {
+  try {
+    print('🌐 API Call: POST /cart with product_id=$productId, quantity=$quantity');
     
-    // Try to parse categories
-    final categories = await getCategories();
-    print('✅ Successfully parsed ${categories.length} categories');
+    final response = await _dio.post('/cart', data: {
+      "product_id": productId,
+      "quantity": quantity,
+    });
     
-  } catch (e) {
-    print('❌ Categories error: $e');
-    print('Stack trace: ${e.toString()}');
+    print('📡 Response status: ${response.statusCode}');
+    print('📄 Response data: ${response.data}');
+    
+    return CartItem.fromJson(response.data);
+  } on DioException catch (e) {
+    print('⚠️ DioException: ${e.message}');
+    print('📄 Error response: ${e.response?.data}');
+    throw _handleError(e);
   }
 }
+
+// Update cart item quantity
+Future<CartItem> updateCartItem(int cartItemId, int quantity) async {
+  try {
+    final response = await _dio.put('/cart/$cartItemId', data: {
+      "quantity": quantity,
+    });
+    return CartItem.fromJson(response.data); 
+  } on DioException catch (e) {
+    throw _handleError(e);
+  }
+}
+
+  // Remove item from cart
+  Future<void> removeFromCart(int cartItemId) async {
+    try {
+      await _dio.delete('/cart/$cartItemId');
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  // Clear entire cart
+  Future<void> clearCart() async {
+    try {
+      await _dio.delete('/cart/clear');
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  String _handleError(DioException e) {
+    if (e.response?.data is Map && e.response?.data['message'] != null) {
+      return e.response!.data['message'];
+    }
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+        return "Connection timeout. Check server.";
+      case DioExceptionType.receiveTimeout:
+        return "Receive timeout. Server not responding.";
+      case DioExceptionType.badResponse:
+        return "Bad response: ${e.response?.statusCode}";
+      case DioExceptionType.unknown:
+        return "Unable to connect to server.";
+      default:
+        return "Unexpected error: ${e.message}";
+    }
+  }
 }

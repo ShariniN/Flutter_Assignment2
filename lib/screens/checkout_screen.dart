@@ -26,13 +26,29 @@ class _CheckoutPageState extends State<CheckoutPage> {
   final _cardHolderController = TextEditingController();
   final LocalAuthentication _auth = LocalAuthentication();
 
-
   bool _isProcessing = false;
 
   @override
   void initState() {
     super.initState();
     _cartManager = widget.cartManager;
+    _checkBiometricStatus();
+  }
+
+  Future<void> _checkBiometricStatus() async {
+    try {
+      final bool canCheckBiometrics = await _auth.canCheckBiometrics;
+      final bool isDeviceSupported = await _auth.isDeviceSupported();
+      final List<BiometricType> availableBiometrics = await _auth.getAvailableBiometrics();
+
+      print('=== BIOMETRIC STATUS ===');
+      print('Device supported: $isDeviceSupported');
+      print('Can check biometrics: $canCheckBiometrics');
+      print('Available biometrics: $availableBiometrics');
+      print('=======================');
+    } catch (e) {
+      print('Error checking biometric status: $e');
+    }
   }
 
   @override
@@ -299,28 +315,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  Future<bool> _authenticateBiometric() async {
-    try {
-      bool canCheckBiometrics = await _auth.canCheckBiometrics;
-      bool isSupported = await _auth.isDeviceSupported();
-
-      if (!canCheckBiometrics || !isSupported) return false;
-
-      bool didAuthenticate = await _auth.authenticate(
-        localizedReason: 'Please authenticate to confirm your order',
-        options: const AuthenticationOptions(
-          biometricOnly: true,
-          stickyAuth: true,
-        ),
-      );
-      return didAuthenticate;
-    } catch (e) {
-      print('Biometric auth error: $e');
-      return false;
-    }
-  }
-
-
   Widget _buildDeliveryDetails(ThemeData theme) {
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
@@ -417,25 +411,101 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   void _placeOrder() async {
-  if (_formKey.currentState!.validate()) {
-    setState(() => _isProcessing = true);
+    if (_formKey.currentState!.validate()) {
+      setState(() => _isProcessing = true);
 
-    bool authenticated = await _authenticateBiometric();
-    if (!authenticated) {
-      setState(() => _isProcessing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Authentication failed!')),
-      );
-      return;
+      try {
+        print('Starting authentication...');
+        
+        final bool canCheckBiometrics = await _auth.canCheckBiometrics;
+        final bool isDeviceSupported = await _auth.isDeviceSupported();
+        final List<BiometricType> availableBiometrics = await _auth.getAvailableBiometrics();
+
+        print('Can check: $canCheckBiometrics, Supported: $isDeviceSupported');
+        print('Available: $availableBiometrics');
+
+        if (!canCheckBiometrics || !isDeviceSupported || availableBiometrics.isEmpty) {
+          print('No biometric available - proceeding without auth');
+          final proceed = await _showNoBiometricDialog();
+          if (!proceed) {
+            setState(() => _isProcessing = false);
+            return;
+          }
+        } else {
+          print('Attempting biometric authentication...');
+          bool didAuthenticate = false;
+          
+          try {
+            didAuthenticate = await _auth.authenticate(
+              localizedReason: 'Scan your fingerprint to confirm your order',
+              options: const AuthenticationOptions(
+                stickyAuth: true,
+                biometricOnly: false,
+              ),
+            );
+            print('Authentication result: $didAuthenticate');
+          } on PlatformException catch (e) {
+            print('PlatformException during auth: ${e.code} - ${e.message}');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Authentication error: ${e.message ?? e.code}')),
+              );
+            }
+            setState(() => _isProcessing = false);
+            return;
+          }
+
+          if (!didAuthenticate) {
+            print('User cancelled authentication');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Authentication cancelled')),
+              );
+            }
+            setState(() => _isProcessing = false);
+            return;
+          }
+        }
+
+        // Proceed with order
+        print('Authentication successful - placing order');
+        await Future.delayed(const Duration(seconds: 2));
+        await _cartManager.clearCart();
+
+        if (mounted) {
+          setState(() => _isProcessing = false);
+          _showSuccessDialog();
+        }
+      } catch (e) {
+        print('Unexpected error: $e');
+        if (mounted) {
+          setState(() => _isProcessing = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e')),
+          );
+        }
+      }
     }
-
-    await Future.delayed(const Duration(seconds: 2));
-
-    _cartManager.clearCart();
-    setState(() => _isProcessing = false);
-
-    _showSuccessDialog();
   }
+
+  Future<bool> _showNoBiometricDialog() async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('No Biometric Available'),
+        content: const Text('Fingerprint authentication is not available. Proceed without it?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Proceed'),
+          ),
+        ],
+      ),
+    ) ?? false;
   }
 
   void _showSuccessDialog() {
@@ -498,4 +568,3 @@ class _ExpiryDateFormatter extends TextInputFormatter {
     return newValue;
   }
 }
-

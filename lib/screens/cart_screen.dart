@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '/models/cart_item.dart';
 import '/services/cart_manager.dart';
 import '/screens/checkout_screen.dart';
+import 'package:provider/provider.dart';
 
 class CartScreen extends StatefulWidget {
   final CartManager cartManager;
@@ -14,12 +15,14 @@ class CartScreen extends StatefulWidget {
 
 class _CartScreenState extends State<CartScreen> {
   late CartManager _cartManager;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
     _cartManager = widget.cartManager;
     _cartManager.addListener(_onCartChanged);
+    _loadCart();
   }
 
   @override
@@ -29,7 +32,26 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   void _onCartChanged() {
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _loadCart() async {
+    setState(() => _isLoading = true);
+    try {
+      await _cartManager.loadCart();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load cart: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
@@ -55,7 +77,7 @@ class _CartScreenState extends State<CartScreen> {
           ),
         ),
         actions: [
-          if (_cartManager.items.isNotEmpty)
+          if (_cartManager.items.isNotEmpty && !_isLoading)
             TextButton(
               onPressed: _showClearCartDialog,
               child: Text(
@@ -68,8 +90,12 @@ class _CartScreenState extends State<CartScreen> {
             ),
         ],
       ),
-      body: _cartManager.items.isEmpty ? _buildEmptyCart(theme) : _buildCartContent(theme),
-      bottomNavigationBar: _cartManager.items.isEmpty ? null : _buildCheckoutBar(theme),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : _cartManager.items.isEmpty
+              ? _buildEmptyCart(theme)
+              : _buildCartContent(theme),
+      bottomNavigationBar: _cartManager.items.isEmpty || _isLoading ? null : _buildCheckoutBar(theme),
     );
   }
 
@@ -255,9 +281,17 @@ class _CartScreenState extends State<CartScreen> {
                       child: Row(
                         children: [
                           InkWell(
-                            onTap: () {
+                            onTap: () async {
                               if (item.quantity > 1) {
-                                _cartManager.updateQuantity(index, item.quantity - 1);
+                                try {
+                                  await _cartManager.updateQuantity(index, item.quantity - 1);
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Failed to update quantity: $e')),
+                                    );
+                                  }
+                                }
                               } else {
                                 _showRemoveItemDialog(index);
                               }
@@ -283,9 +317,17 @@ class _CartScreenState extends State<CartScreen> {
                             ),
                           ),
                           InkWell(
-                            onTap: () {
+                            onTap: () async {
                               if (item.quantity < product.stockQuantity) {
-                                _cartManager.updateQuantity(index, item.quantity + 1);
+                                try {
+                                  await _cartManager.updateQuantity(index, item.quantity + 1);
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Failed to update quantity: $e')),
+                                    );
+                                  }
+                                }
                               } else {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
@@ -529,9 +571,20 @@ class _CartScreenState extends State<CartScreen> {
               ),
             ),
             TextButton(
-              onPressed: () {
-                _cartManager.removeFromCart(index);
-                Navigator.pop(context);
+              onPressed: () async {
+                try {
+                  await _cartManager.removeFromCart(index);
+                  if (mounted) {
+                    Navigator.pop(context);
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to remove item: $e')),
+                    );
+                  }
+                }
               },
               child: const Text(
                 'Remove',
@@ -576,9 +629,20 @@ class _CartScreenState extends State<CartScreen> {
               ),
             ),
             TextButton(
-              onPressed: () {
-                _cartManager.clearCart();
-                Navigator.pop(context);
+              onPressed: () async {
+                try {
+                  await _cartManager.clearCart();
+                  if (mounted) {
+                    Navigator.pop(context);
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to clear cart: $e')),
+                    );
+                  }
+                }
               },
               child: const Text(
                 'Clear All',
