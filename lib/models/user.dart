@@ -10,7 +10,6 @@ class User {
   @JsonKey(name: 'is_admin')
   final bool isAdmin;
 
-  // Add this 👇
   final String? token;
 
   User({

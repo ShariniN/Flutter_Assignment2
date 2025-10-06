@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '/widgets/large_product_card.dart';
 import '/widgets/navbar.dart';
 import '/models/product.dart';
 import '/services/api_service.dart';
-import '/services/cart_manager.dart';
 import 'product_detail_screen.dart';
+import 'tech_specs_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -94,20 +93,10 @@ class ElectronicsStoreState extends State<HomeScreen> {
                   color: Colors.grey.shade50,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
                 ),
-                child: (product.image != null && product.fullImageUrl.isNotEmpty)
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          product.fullImageUrl,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => Icon(
-                            Icons.image_not_supported,
-                            size: 40,
-                            color: Colors.grey.shade400,
-                          ),
-                        ),
-                      )
-                    : Container(
+                child: Builder(
+                  builder: (context) {
+                    if (product.image == null || product.fullImageUrl.isEmpty) {
+                      return Container(
                         decoration: BoxDecoration(
                           color: Colors.grey.shade200,
                           borderRadius: BorderRadius.circular(8),
@@ -117,7 +106,28 @@ class ElectronicsStoreState extends State<HomeScreen> {
                           size: 40,
                           color: Colors.grey.shade400,
                         ),
+                      );
+                    }
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        product.fullImageUrl,
+                        fit: BoxFit.contain,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(child: CircularProgressIndicator());
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            Icons.image_not_supported,
+                            size: 40,
+                            color: Colors.grey.shade400,
+                          );
+                        },
                       ),
+                    );
+                  },
+                ),
               ),
             ),
             // ---------- Product Info ----------
@@ -186,16 +196,12 @@ class ElectronicsStoreState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final cartManager = context.watch<CartManager>();
-    
-    // Filter featured products (you can add isFeatured field to your Product model)
     final featuredProducts = _products.take(4).toList();
 
     return NavigationLayout(
       title: 'Tech Store',
       currentIndex: currentIndex,
       onTabChanged: onTabChanged,
-      cartManager: cartManager,
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
@@ -343,6 +349,33 @@ class ElectronicsStoreState extends State<HomeScreen> {
                             textAlign: TextAlign.center,
                           ),
                         ],
+                      ),
+                    ),
+                  ),
+
+                  // ---------- Tech Specs Button ----------
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Center(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF5A5CE6),
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.memory, color: Colors.white),
+                        label: const Text(
+                          'Explore Tech News & Specs',
+                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const TechSpecsScreen()),
+                          );
+                        },
                       ),
                     ),
                   ),

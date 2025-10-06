@@ -1,63 +1,29 @@
 import 'package:flutter/material.dart';
-import '/models/cart_item.dart';
 import '/services/cart_manager.dart';
 import '/screens/checkout_screen.dart';
 import 'package:provider/provider.dart';
 
 class CartScreen extends StatefulWidget {
-  final CartManager cartManager;
-
-  const CartScreen({Key? key, required this.cartManager}) : super(key: key);
+  const CartScreen({Key? key}) : super(key: key);
 
   @override
   State<CartScreen> createState() => _CartScreenState();
 }
 
 class _CartScreenState extends State<CartScreen> {
-  late CartManager _cartManager;
-  bool _isLoading = false;
-
   @override
   void initState() {
     super.initState();
-    _cartManager = widget.cartManager;
-    _cartManager.addListener(_onCartChanged);
-    _loadCart();
-  }
-
-  @override
-  void dispose() {
-    _cartManager.removeListener(_onCartChanged);
-    super.dispose();
-  }
-
-  void _onCartChanged() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  Future<void> _loadCart() async {
-    setState(() => _isLoading = true);
-    try {
-      await _cartManager.loadCart();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load cart: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CartManager>().loadCart();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
+    final cartManager = context.watch<CartManager>();
+    
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
@@ -77,7 +43,7 @@ class _CartScreenState extends State<CartScreen> {
           ),
         ),
         actions: [
-          if (_cartManager.items.isNotEmpty && !_isLoading)
+          if (cartManager.items.isNotEmpty && !cartManager.isLoading)
             TextButton(
               onPressed: _showClearCartDialog,
               child: Text(
@@ -90,12 +56,14 @@ class _CartScreenState extends State<CartScreen> {
             ),
         ],
       ),
-      body: _isLoading
+      body: cartManager.isLoading
           ? Center(child: CircularProgressIndicator())
-          : _cartManager.items.isEmpty
+          : cartManager.items.isEmpty
               ? _buildEmptyCart(theme)
-              : _buildCartContent(theme),
-      bottomNavigationBar: _cartManager.items.isEmpty || _isLoading ? null : _buildCheckoutBar(theme),
+              : _buildCartContent(theme, cartManager),
+      bottomNavigationBar: cartManager.items.isEmpty || cartManager.isLoading 
+          ? null 
+          : _buildCheckoutBar(theme, cartManager),
     );
   }
 
@@ -146,21 +114,21 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildCartContent(ThemeData theme) {
+  Widget _buildCartContent(ThemeData theme, CartManager cartManager) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        ...List.generate(_cartManager.items.length, (index) {
-          return _buildCartItem(index, theme);
+        ...List.generate(cartManager.items.length, (index) {
+          return _buildCartItem(index, theme, cartManager);
         }),
         const SizedBox(height: 16),
-        _buildOrderSummary(theme),
+        _buildOrderSummary(theme, cartManager),
       ],
     );
   }
 
-  Widget _buildCartItem(int index, ThemeData theme) {
-    final item = _cartManager.items[index];
+  Widget _buildCartItem(int index, ThemeData theme, CartManager cartManager) {
+    final item = cartManager.items[index];
     final product = item.product;
 
     if (product == null) {
@@ -284,7 +252,7 @@ class _CartScreenState extends State<CartScreen> {
                             onTap: () async {
                               if (item.quantity > 1) {
                                 try {
-                                  await _cartManager.updateQuantity(index, item.quantity - 1);
+                                  await context.read<CartManager>().updateQuantity(index, item.quantity - 1);
                                 } catch (e) {
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
@@ -320,7 +288,7 @@ class _CartScreenState extends State<CartScreen> {
                             onTap: () async {
                               if (item.quantity < product.stockQuantity) {
                                 try {
-                                  await _cartManager.updateQuantity(index, item.quantity + 1);
+                                  await context.read<CartManager>().updateQuantity(index, item.quantity + 1);
                                 } catch (e) {
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
@@ -381,7 +349,7 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildOrderSummary(ThemeData theme) {
+  Widget _buildOrderSummary(ThemeData theme, CartManager cartManager) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -405,11 +373,11 @@ class _CartScreenState extends State<CartScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Subtotal (${_cartManager.itemCount} items)',
+                'Subtotal (${cartManager.itemCount} items)',
                 style: theme.textTheme.bodyMedium,
               ),
               Text(
-                'LKR ${_cartManager.totalAmount.toStringAsFixed(2)}',
+                'LKR ${cartManager.totalAmount.toStringAsFixed(2)}',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -446,7 +414,7 @@ class _CartScreenState extends State<CartScreen> {
                 ),
               ),
               Text(
-                'LKR ${_cartManager.totalAmount.toStringAsFixed(2)}',
+                'LKR ${cartManager.totalAmount.toStringAsFixed(2)}',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -458,7 +426,7 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildCheckoutBar(ThemeData theme) {
+  Widget _buildCheckoutBar(ThemeData theme, CartManager cartManager) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -486,7 +454,7 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                     ),
                     Text(
-                      'LKR ${_cartManager.totalAmount.toStringAsFixed(2)}',
+                      'LKR ${cartManager.totalAmount.toStringAsFixed(2)}',
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -530,17 +498,19 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   void _proceedToCheckout() {
+    final cartManager = context.read<CartManager>();
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => CheckoutPage(cartManager: _cartManager),
+        builder: (context) => CheckoutPage(cartManager: cartManager),
       ),
     );
   }
 
   void _showRemoveItemDialog(int index) {
     final theme = Theme.of(context);
-    final item = _cartManager.items[index];
+    final cartManager = context.read<CartManager>();
+    final item = cartManager.items[index];
 
     showDialog(
       context: context,
@@ -573,7 +543,7 @@ class _CartScreenState extends State<CartScreen> {
             TextButton(
               onPressed: () async {
                 try {
-                  await _cartManager.removeFromCart(index);
+                  await context.read<CartManager>().removeFromCart(index);
                   if (mounted) {
                     Navigator.pop(context);
                   }
@@ -631,7 +601,7 @@ class _CartScreenState extends State<CartScreen> {
             TextButton(
               onPressed: () async {
                 try {
-                  await _cartManager.clearCart();
+                  await context.read<CartManager>().clearCart();
                   if (mounted) {
                     Navigator.pop(context);
                   }

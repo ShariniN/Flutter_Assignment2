@@ -1,9 +1,9 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/user.dart';
 import '../models/product.dart';
 import '../models/order.dart';
-import '../models/wishlist_item.dart';
 import '../models/category.dart';
 import '../models/cart_item.dart';
 
@@ -36,6 +36,7 @@ class ApiService {
     ));
   }
 
+  // Authentication Methods
   Future<User> register(String name, String email, String password) async {
     try {
       final response = await _dio.post('/register', data: {
@@ -43,8 +44,15 @@ class ApiService {
         "email": email,
         "password": password,
       });
-      await _secureStorage.write(key: 'auth_token', value: response.data['token']);
-      return User.fromJson(response.data['user']);
+      
+      final token = response.data['token'];
+      final user = User.fromJson(response.data);
+      
+      // Store token and user data
+      await _secureStorage.write(key: 'auth_token', value: token);
+      await _saveUserData(user);
+      
+      return user;
     } on DioException catch (e) {
       throw _handleError(e);
     }
@@ -52,13 +60,32 @@ class ApiService {
 
   Future<User> login(String email, String password) async {
     try {
+      print('Attempting login for: $email');
       final response = await _dio.post('/login', data: {
         "email": email,
         "password": password,
       });
-      await _secureStorage.write(key: 'auth_token', value: response.data['token']);
-      return User.fromJson(response.data['user']);
+      
+      print('📡 Login response received');
+      print('Response data: ${response.data}');
+      
+      final token = response.data['token'];
+      print('🔑 Token received: ${token?.substring(0, 20)}...');
+      
+      final user = User.fromJson(response.data);
+      print('👤 User parsed: ${user.name} (${user.email})');
+      
+      // Store token and user data
+      await _secureStorage.write(key: 'auth_token', value: token);
+      print('✅ Token stored');
+      
+      await _saveUserData(user);
+      print('User data stored');
+      
+      return user;
     } on DioException catch (e) {
+      print('Login failed: ${e.message}');
+      print('Response: ${e.response?.data}');
       throw _handleError(e);
     }
   }
@@ -66,10 +93,55 @@ class ApiService {
   Future<void> logout() async {
     try {
       await _dio.post('/logout');
-    } catch (e) {} 
-    finally {
+    } catch (e) {
+      print('Logout API error: $e');
+    } finally {
       await _secureStorage.delete(key: 'auth_token');
+      await _secureStorage.delete(key: 'user_data');
     }
+  }
+
+  // User Data Management
+  Future<void> _saveUserData(User user) async {
+    try {
+      print('Saving user data: ${user.name} (${user.email})');
+      final userJson = jsonEncode(user.toJson());
+      print('User JSON to save: $userJson');
+      await _secureStorage.write(key: 'user_data', value: userJson);
+      print('User data saved successfully');
+    } catch (e, stackTrace) {
+      print('Error saving user data: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+ Future<User?> getCurrentUser() async {
+  try {
+    print('Reading user data from secure storage...');
+    final userJson = await _secureStorage.read(key: 'user_data');
+    print('Stored user JSON: $userJson'); 
+    
+    if (userJson == null) {
+      print('No user data found in storage');
+      return null;
+    }
+    
+    print('User JSON found: $userJson');
+    final userData = jsonDecode(userJson);
+    print('User data decoded successfully');
+    
+    return User.fromJson(userData);
+  } catch (e, stackTrace) {
+    print('Error getting current user: $e');
+    print('Stack trace: $stackTrace');
+    return null;
+  }
+}
+
+  Future<bool> isLoggedIn() async {
+    final token = await _secureStorage.read(key: 'auth_token');
+    return token != null;
   }
 
   Future<List<Product>> getProducts() async {
@@ -92,6 +164,7 @@ class ApiService {
     }
   }
 
+  // Category Methods
   Future<List<Category>> getCategories() async {
     try {
       final response = await _dio.get('/categories');
@@ -124,33 +197,7 @@ class ApiService {
     }
   }
 
-  Future<List<WishlistItem>> getWishlist() async {
-    try {
-      final response = await _dio.get('/wishlist');
-      return (response.data as List)
-          .map((json) => WishlistItem.fromJson(json))
-          .toList();
-    } on DioException catch (e) {
-      throw _handleError(e);
-    }
-  }
-
-  Future<void> addToWishlist(int productId) async {
-    try {
-      await _dio.post('/wishlist', data: {"product_id": productId});
-    } on DioException catch (e) {
-      throw _handleError(e);
-    }
-  }
-
-  Future<void> removeFromWishlist(int productId) async {
-    try {
-      await _dio.delete('/wishlist/$productId');
-    } on DioException catch (e) {
-      throw _handleError(e);
-    }
-  }
-
+  // Order Methods
   Future<Order> placeOrder(List<int> productIds) async {
     try {
       final response = await _dio.post('/orders', data: {"products": productIds});
@@ -169,7 +216,7 @@ class ApiService {
     }
   }
 
-    // Get cart items
+  // Cart Methods
   Future<List<CartItem>> getCart() async {
     try {
       final response = await _dio.get('/cart');
@@ -182,38 +229,36 @@ class ApiService {
   }
 
   Future<CartItem> addToCart(int productId, int quantity) async {
-  try {
-    print('🌐 API Call: POST /cart with product_id=$productId, quantity=$quantity');
-    
-    final response = await _dio.post('/cart', data: {
-      "product_id": productId,
-      "quantity": quantity,
-    });
-    
-    print('📡 Response status: ${response.statusCode}');
-    print('📄 Response data: ${response.data}');
-    
-    return CartItem.fromJson(response.data);
-  } on DioException catch (e) {
-    print('⚠️ DioException: ${e.message}');
-    print('📄 Error response: ${e.response?.data}');
-    throw _handleError(e);
+    try {
+      print('🌐 API Call: POST /cart with product_id=$productId, quantity=$quantity');
+      
+      final response = await _dio.post('/cart', data: {
+        "product_id": productId,
+        "quantity": quantity,
+      });
+      
+      print('Response status: ${response.statusCode}');
+      print('Response data: ${response.data}');
+      
+      return CartItem.fromJson(response.data);
+    } on DioException catch (e) {
+      print('DioException: ${e.message}');
+      print('Error response: ${e.response?.data}');
+      throw _handleError(e);
+    }
   }
-}
 
-// Update cart item quantity
-Future<CartItem> updateCartItem(int cartItemId, int quantity) async {
-  try {
-    final response = await _dio.put('/cart/$cartItemId', data: {
-      "quantity": quantity,
-    });
-    return CartItem.fromJson(response.data); 
-  } on DioException catch (e) {
-    throw _handleError(e);
+  Future<CartItem> updateCartItem(int cartItemId, int quantity) async {
+    try {
+      final response = await _dio.put('/cart/$cartItemId', data: {
+        "quantity": quantity,
+      });
+      return CartItem.fromJson(response.data); 
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
   }
-}
 
-  // Remove item from cart
   Future<void> removeFromCart(int cartItemId) async {
     try {
       await _dio.delete('/cart/$cartItemId');
@@ -222,7 +267,6 @@ Future<CartItem> updateCartItem(int cartItemId, int quantity) async {
     }
   }
 
-  // Clear entire cart
   Future<void> clearCart() async {
     try {
       await _dio.delete('/cart/clear');
@@ -231,6 +275,7 @@ Future<CartItem> updateCartItem(int cartItemId, int quantity) async {
     }
   }
 
+  // Error Handler
   String _handleError(DioException e) {
     if (e.response?.data is Map && e.response?.data['message'] != null) {
       return e.response!.data['message'];

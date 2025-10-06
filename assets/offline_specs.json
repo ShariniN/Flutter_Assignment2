@@ -1,0 +1,61 @@
+{
+  "status": true,
+  "data": {
+    "phones": [
+      {
+        "brand": "Apple",
+        "phone_name": "iPhone 14 Pro",
+        "slug": "apple_iphone_14_pro-12345",
+        "image": "https://fdn2.gsmarena.com/vv/bigpic/apple-iphone-14-pro.jpg",
+        "detail": "Apple iPhone 14 Pro full specs",
+        "released": "2022, September 16",
+        "os": "iOS 16",
+        "storage": "128GB/256GB/512GB/1TB",
+        "ram": "6GB",
+        "display": "6.1 inches, 1179 x 2556 pixels",
+        "battery": "3200 mAh",
+        "camera": {
+          "primary": "48 MP",
+          "secondary": "12 MP"
+        },
+        "price": "From $999"
+      },
+      {
+        "brand": "Samsung",
+        "phone_name": "Galaxy S23 Ultra",
+        "slug": "samsung_galaxy_s23_ultra-54321",
+        "image": "https://fdn2.gsmarena.com/vv/bigpic/samsung-galaxy-s23-ultra.jpg",
+        "detail": "Samsung Galaxy S23 Ultra full specs",
+        "released": "2023, February 17",
+        "os": "Android 13, One UI 5.1",
+        "storage": "256GB/512GB/1TB",
+        "ram": "12GB",
+        "display": "6.8 inches, 1440 x 3088 pixels",
+        "battery": "5000 mAh",
+        "camera": {
+          "primary": "200 MP",
+          "secondary": "12 MP + 10 MP + 10 MP"
+        },
+        "price": "From $1199"
+      },
+      {
+        "brand": "Google",
+        "phone_name": "Pixel 7 Pro",
+        "slug": "google_pixel_7_pro-67890",
+        "image": "https://fdn2.gsmarena.com/vv/bigpic/google-pixel-7-pro.jpg",
+        "detail": "Google Pixel 7 Pro full specs",
+        "released": "2022, October 13",
+        "os": "Android 13",
+        "storage": "128GB/256GB/512GB",
+        "ram": "12GB",
+        "display": "6.7 inches, 1440 x 3120 pixels",
+        "battery": "5000 mAh",
+        "camera": {
+          "primary": "50 MP",
+          "secondary": "12 MP + 48 MP"
+        },
+        "price": "From $899"
+      }
+    ]
+  }
+}

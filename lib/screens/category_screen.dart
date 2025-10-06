@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '/models/category.dart';
 import '/models/product.dart';
 import '/services/api_service.dart';
-import '/services/cart_manager.dart';
 import 'product_detail_screen.dart';
 import '/widgets/navbar.dart';
 
@@ -33,8 +31,9 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
   Category? _selectedCategory;
 
-  List<String> _brands = [];
-  List<String> _selectedBrands = [];
+  Map<int, String> _brandsMap = {};
+  List<int> _selectedBrandIds = [];
+  
   late double _minPrice;
   late double _maxPrice;
   late RangeValues _priceRange;
@@ -83,11 +82,19 @@ class _CategoryScreenState extends State<CategoryScreen> {
         _priceRange = RangeValues(0, 0);
       }
 
-      _brands = categoryProducts.map((p) => p.name).toSet().toList();
+      // Extract unique brands from products
+      final brandsMap = <int, String>{};
+      for (var product in categoryProducts) {
+        if (product.brandId != null && product.brandName != null) {
+          brandsMap[product.brandId!] = product.brandName!;
+        }
+      }
 
       setState(() {
         _products = categoryProducts;
         _filteredProducts = categoryProducts;
+        _brandsMap = brandsMap;
+        _selectedBrandIds = [];
         _isLoadingProducts = false;
       });
     } catch (e) {
@@ -103,8 +110,10 @@ class _CategoryScreenState extends State<CategoryScreen> {
         .where((p) => p.price >= _priceRange.start && p.price <= _priceRange.end)
         .toList();
 
-    if (_selectedBrands.isNotEmpty) {
-      filtered = filtered.where((p) => _selectedBrands.contains(p.name)).toList();
+    if (_selectedBrandIds.isNotEmpty) {
+      filtered = filtered.where((p) => 
+        p.brandId != null && _selectedBrandIds.contains(p.brandId)
+      ).toList();
     }
 
     setState(() => _filteredProducts = filtered);
@@ -248,6 +257,9 @@ class _CategoryScreenState extends State<CategoryScreen> {
   }
 
   Widget _buildBrandFilter(StateSetter setModalState) {
+    final sortedBrands = _brandsMap.entries.toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -260,30 +272,31 @@ class _CategoryScreenState extends State<CategoryScreen> {
         SizedBox(height: 16),
         Container(
           height: 200,
-          child: _brands.isEmpty
+          child: _brandsMap.isEmpty
               ? Center(child: Text('No brands available'))
               : ListView.builder(
-                  itemCount: _brands.length,
+                  itemCount: sortedBrands.length,
                   itemBuilder: (context, index) {
-                    final brand = _brands[index];
-                    final isSelected = _selectedBrands.contains(brand);
+                    final brandId = sortedBrands[index].key;
+                    final brandName = sortedBrands[index].value;
+                    final isSelected = _selectedBrandIds.contains(brandId);
 
                     return CheckboxListTile(
-                      title: Text(brand),
+                      title: Text(brandName),
                       value: isSelected,
                       onChanged: (bool? value) {
                         setModalState(() {
                           if (value == true) {
-                            _selectedBrands.add(brand);
+                            _selectedBrandIds.add(brandId);
                           } else {
-                            _selectedBrands.remove(brand);
+                            _selectedBrandIds.remove(brandId);
                           }
                         });
                         setState(() {
                           if (value == true) {
-                            _selectedBrands.add(brand);
+                            _selectedBrandIds.add(brandId);
                           } else {
-                            _selectedBrands.remove(brand);
+                            _selectedBrandIds.remove(brandId);
                           }
                         });
                       },
@@ -376,12 +389,9 @@ class _CategoryScreenState extends State<CategoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cartManager = context.watch<CartManager>();
-
     return NavigationLayout(
       title: widget.categoryName,
       currentIndex: 1,
-      cartManager: cartManager,
       showBackButton: true,
       onBackPressed: () => Navigator.pop(context),
       additionalActions: [
@@ -395,7 +405,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
           ? Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                // Category tabs
                 Container(
                   height: 50,
                   padding: EdgeInsets.symmetric(vertical: 8),
@@ -430,7 +439,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
                     },
                   ),
                 ),
-                // Products grid
                 Expanded(
                   child: _isLoadingProducts
                       ? Center(child: CircularProgressIndicator())

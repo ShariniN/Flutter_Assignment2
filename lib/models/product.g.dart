@@ -17,9 +17,14 @@ Product _$ProductFromJson(Map<String, dynamic> json) => Product(
       category: json['category'] == null
           ? null
           : Category.fromJson(json['category'] as Map<String, dynamic>),
+      brandId: (json['brand_id'] as num?)?.toInt(),
+      brandName: json['brand_name'] as String?,
       sku: json['sku'] as String?,
-      image: json['image'] as String?,
-      specifications: json['specifications'] as Map<String, dynamic>?,
+      image: json['image_url'] as String?,
+      specifications: Product._specificationsFromJson(json['specifications']),
+      reviews: json['reviews'] == null
+          ? const []
+          : Product._reviewsFromJson(json['reviews']),
       isActive: json['is_active'] == null
           ? true
           : Product._boolFromInt(json['is_active']),
@@ -37,9 +42,12 @@ Map<String, dynamic> _$ProductToJson(Product instance) => <String, dynamic>{
       'stock_quantity': instance.stockQuantity,
       'category_id': instance.categoryId,
       'category': instance.category,
+      'brand_id': instance.brandId,
+      'brand_name': instance.brandName,
       'sku': instance.sku,
-      'image': instance.image,
+      'image_url': instance.image,
       'specifications': instance.specifications,
+      'reviews': instance.reviews,
       'is_active': instance.isActive,
       'is_featured': instance.isFeatured,
     };

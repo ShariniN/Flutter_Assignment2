@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/category.dart';
-import '../models/product.dart';
 import '../services/api_service.dart';
-import '../services/cart_manager.dart';
 import '../screens/category_screen.dart';
 import '../screens/cart_screen.dart';
 import '../screens/home_screen.dart';
@@ -16,7 +14,6 @@ class NavigationLayout extends StatefulWidget {
   final bool showBackButton;
   final VoidCallback? onBackPressed;
   final List<Widget>? additionalActions;
-  final CartManager cartManager;
 
   const NavigationLayout({
     Key? key,
@@ -27,7 +24,6 @@ class NavigationLayout extends StatefulWidget {
     this.showBackButton = false,
     this.onBackPressed,
     this.additionalActions,
-    required this.cartManager,
   }) : super(key: key);
 
   @override
@@ -247,7 +243,7 @@ class _NavigationLayoutState extends State<NavigationLayout> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => CartScreen(cartManager: widget.cartManager),
+        builder: (context) => CartScreen(),
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:assignment1/services/api_service.dart';
 import 'package:assignment1/services/cart_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:assignment1/providers/connectivity_provider.dart';
 
 void main() {
   runApp(MyApp());
@@ -10,18 +11,25 @@ void main() {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-  
+
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) {
-        final apiService = ApiService();
-        final cartManager = CartManager(apiService);
-        cartManager.loadCart().catchError((error) {
-          print('Cart load failed (user might not be logged in): $error');
-        });
-        return cartManager;
-      },
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<ConnectivityProvider>(
+          create: (_) => ConnectivityProvider(),
+        ),
+        ChangeNotifierProvider<CartManager>(
+          create: (context) {
+            final apiService = ApiService();
+            final cartManager = CartManager(apiService);
+            cartManager.loadCart().catchError((error) {
+              print('Cart load failed (user might not be logged in): $error');
+            });
+            return cartManager;
+          },
+        ),
+      ],
       child: MaterialApp(
         title: 'Electronics Store',
         theme: ThemeData(
