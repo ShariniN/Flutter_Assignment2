@@ -191,11 +191,11 @@ class _CartScreenState extends State<CartScreen> {
               color: theme.brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[100],
               borderRadius: BorderRadius.circular(8),
             ),
-            child: product.image != null && product.image!.isNotEmpty
+            child: product.image != null && product.fullImageUrl.isNotEmpty
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Image.network(
-                      product.image!,
+                      product.fullImageUrl,
                       width: 80,
                       height: 80,
                       fit: BoxFit.cover,

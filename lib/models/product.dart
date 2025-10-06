@@ -43,21 +43,30 @@ class Product {
     this.isFeatured = false,
   });
 
-  static bool _boolFromInt(dynamic value) {
-  try {
-    if (value == null) return false;
-    if (value is bool) return value;
-    if (value is int) return value == 1;
-    if (value is String) {
-      if (value.isEmpty) return false;
-      return value == '1' || value.toLowerCase() == 'true';
+  // ADD THIS GETTER
+  String get fullImageUrl {
+    if (image == null || image!.isEmpty) return '';
+    if (image!.startsWith('http://') || image!.startsWith('https://')) {
+      return image!;
     }
-    return false;
-  } catch (e) {
-    print('Error converting to bool: $value, error: $e');
-    return false;
+    return 'https://ssp2-assignment-production.up.railway.app/$image';
   }
-}
+
+  static bool _boolFromInt(dynamic value) {
+    try {
+      if (value == null) return false;
+      if (value is bool) return value;
+      if (value is int) return value == 1;
+      if (value is String) {
+        if (value.isEmpty) return false;
+        return value == '1' || value.toLowerCase() == 'true';
+      }
+      return false;
+    } catch (e) {
+      print('Error converting to bool: $value, error: $e');
+      return false;
+    }
+  }
 
   static double _priceFromJson(dynamic value) {
     if (value is String) return double.parse(value);

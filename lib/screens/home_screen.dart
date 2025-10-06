@@ -94,11 +94,11 @@ class ElectronicsStoreState extends State<HomeScreen> {
                   color: Colors.grey.shade50,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
                 ),
-                child: (product.image != null && product.image!.isNotEmpty)
+                child: (product.image != null && product.fullImageUrl.isNotEmpty)
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(
-                          product.image!,
+                          product.fullImageUrl,
                           fit: BoxFit.contain,
                           errorBuilder: (_, __, ___) => Icon(
                             Icons.image_not_supported,

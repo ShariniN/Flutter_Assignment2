@@ -319,7 +319,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                 borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
                 child: product.image != null
                     ? Image.network(
-                        product.image!,
+                        product.fullImageUrl,
                         fit: BoxFit.cover,
                         width: double.infinity,
                         errorBuilder: (_, __, ___) => Center(
