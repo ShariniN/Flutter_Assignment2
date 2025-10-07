@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import '../services/specs_service.dart';
 import '../providers/connectivity_provider.dart';
@@ -15,6 +19,7 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
   bool _loading = true;
   List<Map<String, dynamic>> _phones = [];
   String? _errorMessage;
+  bool _usingCachedData = false;
 
   @override
   void initState() {
@@ -22,36 +27,163 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
     _loadSpecs();
   }
 
+  Future<String> _getCacheFilePath() async {
+    final directory = await getApplicationDocumentsDirectory();
+    return '${directory.path}/cached_specs.json';
+  }
+
+  Future<void> _saveCacheData(List<Map<String, dynamic>> data) async {
+    try {
+      final filePath = await _getCacheFilePath();
+      final file = File(filePath);
+      
+      final cacheData = {
+        'status': true,
+        'timestamp': DateTime.now().toIso8601String(),
+        'data': {
+          'phones': data,
+        },
+      };
+      
+      await file.writeAsString(json.encode(cacheData));
+      print('Cache saved successfully at $filePath');
+    } catch (e) {
+      print('Error saving cache: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadCacheData() async {
+    try {
+      final filePath = await _getCacheFilePath();
+      final file = File(filePath);
+      
+      if (!await file.exists()) {
+        print('Cache file does not exist');
+        return await _loadFallbackData();
+      }
+
+      final jsonString = await file.readAsString();
+      final jsonData = json.decode(jsonString);
+      
+      if (jsonData['status'] == true && jsonData['data'] != null) {
+        final phones = jsonData['data']['phones'] as List;
+        print('Loaded ${phones.length} phones from cache');
+        return phones.cast<Map<String, dynamic>>();
+      }
+      return await _loadFallbackData();
+    } catch (e) {
+      print('Error loading cache: $e');
+      return await _loadFallbackData();
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadFallbackData() async {
+    try {
+      print('Loading fallback data from assets');
+      final String jsonString = await rootBundle.loadString('assets/offline_specs.json');
+      final jsonData = json.decode(jsonString);
+      
+      if (jsonData['status'] == true && jsonData['data'] != null) {
+        final phones = jsonData['data']['phones'] as List;
+        return phones.map((phone) => {
+          'phone_name': phone['phone_name'],
+          'brand': phone['brand'],
+          'slug': phone['slug'],
+          'thumbnail': phone['image'],
+          'detail': phone['detail'],
+          'released': phone['released'],
+          'os': phone['os'],
+          'storage': phone['storage'],
+          'ram': phone['ram'],
+          'display': phone['display'],
+          'battery': phone['battery'],
+          'camera': phone['camera'],
+          'price': phone['price'],
+        } as Map<String, dynamic>).toList();
+      }
+      return [];
+    } catch (e) {
+      print('Error loading fallback data: $e');
+      return [];
+    }
+  }
+
   Future<void> _loadSpecs() async {
+    HapticFeedback.mediumImpact(); 
+    
     final connectivityProvider = Provider.of<ConnectivityProvider>(context, listen: false);
     
-    if (!connectivityProvider.isOnline) {
-      setState(() {
-        _loading = false;
-        _errorMessage = 'No internet connection';
-      });
-      _showMessage('No internet connection. Please check your network.', isError: true);
-      return;
-    }
-
     setState(() {
       _loading = true;
       _errorMessage = null;
+      _usingCachedData = false;
     });
+
+    if (!connectivityProvider.isOnline) {
+      try {
+        final cachedPhones = await _loadCacheData();
+        if (mounted) {
+          setState(() {
+            _phones = cachedPhones;
+            _loading = false;
+            _usingCachedData = true;
+            _errorMessage = cachedPhones.isEmpty ? 'No cached data available' : null;
+          });
+          if (cachedPhones.isNotEmpty) {
+            HapticFeedback.lightImpact(); 
+            _showMessage('Showing cached data', isError: false);
+          } else {
+            HapticFeedback.heavyImpact(); 
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          HapticFeedback.heavyImpact(); 
+          setState(() {
+            _loading = false;
+            _errorMessage = 'Failed to load cached data';
+          });
+          _showMessage('No internet connection and failed to load cached data', isError: true);
+        }
+      }
+      return;
+    }
 
     try {
       final data = await _service.fetchTechData();
       if (mounted) {
+        HapticFeedback.lightImpact(); 
         setState(() {
           _phones = data;
           _errorMessage = null;
+          _usingCachedData = false;
         });
+        _saveCacheData(data);
       }
     } catch (e) {
-      print('Error loading specs: $e');
-      if (mounted) {
-        setState(() => _errorMessage = 'Failed to load tech specs');
-        _showMessage('Failed to load tech specs. Please try again.', isError: true);
+      print('Error loading online specs: $e');
+      try {
+        final cachedPhones = await _loadCacheData();
+        if (mounted) {
+          setState(() {
+            _phones = cachedPhones;
+            _usingCachedData = true;
+            _errorMessage = cachedPhones.isEmpty ? 'Failed to load tech specs' : null;
+          });
+          if (cachedPhones.isNotEmpty) {
+            HapticFeedback.mediumImpact(); // Partial success haptic
+            _showMessage('Failed to load online data. Showing cached data.', isError: true);
+          } else {
+            HapticFeedback.heavyImpact(); // Error haptic
+            _showMessage('Failed to load tech specs. Please try again.', isError: true);
+          }
+        }
+      } catch (cacheError) {
+        if (mounted) {
+          HapticFeedback.heavyImpact(); // Error haptic
+          setState(() => _errorMessage = 'Failed to load tech specs');
+          _showMessage('Failed to load tech specs. Please try again.', isError: true);
+        }
       }
     } finally {
       if (mounted) {
@@ -85,21 +217,58 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
     );
   }
 
+  Future<Map<String, dynamic>> _loadCachedPhoneSpecs(String phoneSlug) async {
+    try {
+      final filePath = await _getCacheFilePath();
+      final file = File(filePath);
+      
+      if (!await file.exists()) {
+        return {};
+      }
+
+      final jsonString = await file.readAsString();
+      final jsonData = json.decode(jsonString);
+      
+      if (jsonData['data'] != null && jsonData['data']['phones'] != null) {
+        final phones = jsonData['data']['phones'] as List;
+        final phone = phones.firstWhere(
+          (p) => p['slug'] == phoneSlug,
+          orElse: () => {},
+        );
+        return phone as Map<String, dynamic>;
+      }
+      return {};
+    } catch (e) {
+      print('Error loading cached phone specs: $e');
+      return {};
+    }
+  }
+
   Future<void> _showSpecsDialog(String phoneSlug) async {
+    HapticFeedback.lightImpact(); // Haptic for selection
+    
     final connectivityProvider = Provider.of<ConnectivityProvider>(context, listen: false);
     
-    if (!connectivityProvider.isOnline) {
-      _showMessage('No internet connection available', isError: true);
+    if (_usingCachedData || !connectivityProvider.isOnline) {
+      final phone = await _loadCachedPhoneSpecs(phoneSlug);
+      
+      if (phone.isEmpty) {
+        HapticFeedback.heavyImpact(); // Error haptic
+        _showMessage('Phone details not found', isError: true);
+        return;
+      }
+
+      _showOfflineSpecsDialog(phone);
       return;
     }
 
-    // Show loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(
+      builder: (_) => Center(
         child: Card(
-          child: Padding(
+          color: Theme.of(context).cardColor,
+          child: const Padding(
             padding: EdgeInsets.all(20),
             child: CircularProgressIndicator(),
           ),
@@ -111,22 +280,26 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
       final specs = await _service.fetchPhoneSpecs(phoneSlug);
       
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context);
 
       if (specs.isEmpty) {
+        HapticFeedback.heavyImpact(); // Error haptic
         _showMessage('No specifications available', isError: true);
         return;
       }
+
+      HapticFeedback.lightImpact(); // Success haptic
 
       final specCategories = specs['specifications'] as List<dynamic>? ?? [];
 
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
-              const Icon(Icons.smartphone, size: 28),
+              Icon(Icons.smartphone, size: 28, color: Theme.of(context).primaryColor),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -142,12 +315,11 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Phone info header
                   if (specs['brand'] != null || specs['release_date'] != null)
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.grey[100],
+                        color: Theme.of(context).cardColor,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Column(
@@ -158,9 +330,11 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
                               children: [
                                 const Icon(Icons.business, size: 16, color: Colors.grey),
                                 const SizedBox(width: 8),
-                                Text(
-                                  'Brand: ${specs['brand']}',
-                                  style: const TextStyle(fontWeight: FontWeight.w500),
+                                Expanded(
+                                  child: Text(
+                                    'Brand: ${specs['brand']}',
+                                    style: const TextStyle(fontWeight: FontWeight.w500),
+                                  ),
                                 ),
                               ],
                             ),
@@ -170,9 +344,11 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
                               children: [
                                 const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
                                 const SizedBox(width: 8),
-                                Text(
-                                  'Release: ${specs['release_date']}',
-                                  style: const TextStyle(fontWeight: FontWeight.w500),
+                                Expanded(
+                                  child: Text(
+                                    'Release: ${specs['release_date']}',
+                                    style: const TextStyle(fontWeight: FontWeight.w500),
+                                  ),
                                 ),
                               ],
                             ),
@@ -181,7 +357,6 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
                       ),
                     ),
                   const SizedBox(height: 16),
-                  // Specifications
                   ...specCategories.map((cat) {
                     final catTitle = cat['title'] ?? '';
                     final catSpecs = cat['specs'] as List<dynamic>? ?? [];
@@ -218,7 +393,6 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
                                     '${s['key']}:',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w500,
-                                      color: Colors.black87,
                                     ),
                                   ),
                                 ),
@@ -227,7 +401,7 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
                                   flex: 3,
                                   child: Text(
                                     valText,
-                                    style: TextStyle(color: Colors.grey[700]),
+                                    style: const TextStyle(color: Colors.grey),
                                   ),
                                 ),
                               ],
@@ -244,7 +418,10 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
           ),
           actions: [
             TextButton.icon(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                HapticFeedback.selectionClick();
+                Navigator.pop(context);
+              },
               icon: const Icon(Icons.close),
               label: const Text('Close'),
             ),
@@ -253,38 +430,166 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context);
+      HapticFeedback.heavyImpact(); 
       _showMessage('Failed to load specifications', isError: true);
     }
+  }
+
+  void _showOfflineSpecsDialog(Map<String, dynamic> phone) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.smartphone, size: 28, color: Theme.of(context).primaryColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                phone['phone_name'] ?? 'Unknown',
+                style: const TextStyle(fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.cached, size: 16, color: Colors.blue.shade700),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Showing cached data',
+                          style: TextStyle(
+                            color: Colors.blue.shade700,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildOfflineSpecItem('Brand', phone['brand']),
+                _buildOfflineSpecItem('Released', phone['released']),
+                _buildOfflineSpecItem('OS', phone['os']),
+                _buildOfflineSpecItem('Storage', phone['storage']),
+                _buildOfflineSpecItem('RAM', phone['ram']),
+                _buildOfflineSpecItem('Display', phone['display']),
+                _buildOfflineSpecItem('Battery', phone['battery']),
+                if (phone['camera'] != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Camera',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  _buildOfflineSpecItem('Primary', phone['camera']['primary']),
+                  _buildOfflineSpecItem('Secondary', phone['camera']['secondary']),
+                ],
+                _buildOfflineSpecItem('Price', phone['price']),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () {
+              HapticFeedback.selectionClick(); 
+              Navigator.pop(context);
+            },
+            icon: const Icon(Icons.close),
+            label: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOfflineSpecItem(String label, dynamic value) {
+    if (value == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value.toString(),
+              style: const TextStyle(color: Colors.grey),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildOfflineIndicator() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.orange.shade100,
+        color: _usingCachedData ? Colors.blue.shade100 : Colors.orange.shade100,
         border: Border(
-          bottom: BorderSide(color: Colors.orange.shade300, width: 2),
+          bottom: BorderSide(
+            color: _usingCachedData ? Colors.blue.shade300 : Colors.orange.shade300, 
+            width: 2
+          ),
         ),
       ),
       child: Row(
         children: [
-          Icon(Icons.wifi_off, color: Colors.orange.shade800, size: 20),
+          Icon(
+            _usingCachedData ? Icons.cached : Icons.wifi_off,
+            color: _usingCachedData ? Colors.blue.shade800 : Colors.orange.shade800,
+            size: 20,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'You are offline',
+              _usingCachedData ? 'Showing cached data' : 'You are offline',
               style: TextStyle(
-                color: Colors.orange.shade900,
+                color: _usingCachedData ? Colors.blue.shade900 : Colors.orange.shade900,
                 fontWeight: FontWeight.w500,
               ),
             ),
           ),
           TextButton(
-            onPressed: _loadSpecs,
+            onPressed: () {
+              HapticFeedback.mediumImpact(); 
+              _loadSpecs();
+            },
             child: Text(
               'Retry',
-              style: TextStyle(color: Colors.orange.shade900),
+              style: TextStyle(
+                color: _usingCachedData ? Colors.blue.shade900 : Colors.orange.shade900
+              ),
             ),
           ),
         ],
@@ -313,7 +618,10 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: _loadSpecs,
+            onPressed: () {
+              HapticFeedback.heavyImpact();
+              _loadSpecs();
+            },
             icon: const Icon(Icons.refresh),
             label: const Text('Retry'),
             style: ElevatedButton.styleFrom(
@@ -338,27 +646,27 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.refresh),
-                onPressed: connectivity.isOnline ? _loadSpecs : null,
-                tooltip: connectivity.isOnline ? 'Refresh' : 'No internet connection',
+                onPressed: () {
+                  HapticFeedback.mediumImpact(); 
+                  _loadSpecs();
+                },
+                tooltip: 'Refresh',
               ),
             ],
           ),
           body: Column(
             children: [
-              // Offline indicator
-              if (!connectivity.isOnline) _buildOfflineIndicator(),
-              // Main content
+              if (!connectivity.isOnline || _usingCachedData) _buildOfflineIndicator(),
               Expanded(
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())
                     : _phones.isEmpty
                         ? _buildEmptyState()
                         : RefreshIndicator(
-                            onRefresh: connectivity.isOnline 
-                                ? _loadSpecs 
-                                : () async {
-                                    _showMessage('No internet connection', isError: true);
-                                  },
+                            onRefresh: () async {
+                              HapticFeedback.mediumImpact(); 
+                              await _loadSpecs();
+                            },
                             child: ListView.builder(
                               padding: const EdgeInsets.all(10),
                               itemCount: _phones.length,
@@ -369,6 +677,7 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
                                         .replaceAll(' ', '_')
                                         .toLowerCase();
                                 return Card(
+                                  color: Theme.of(context).cardColor,
                                   margin: const EdgeInsets.symmetric(vertical: 8),
                                   elevation: 2,
                                   shape: RoundedRectangleBorder(
@@ -415,8 +724,8 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
                                       padding: const EdgeInsets.only(top: 4),
                                       child: Text(
                                         item['brand'] ?? 'No brand',
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
+                                        style: const TextStyle(
+                                          color: Colors.grey,
                                         ),
                                       ),
                                     ),

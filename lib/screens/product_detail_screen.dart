@@ -36,8 +36,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   @override
   void initState() {
     super.initState();
-    _loadCurrentUser();
-    _loadProduct();
+    _initializeData();
+  }
+
+  // Initialize data in the correct order
+  Future<void> _initializeData() async {
+    await _loadCurrentUser();
+    await _loadProduct();
   }
 
   Future<void> _loadCurrentUser() async {
@@ -117,7 +122,6 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
         setState(() {
           _reviews = rows
               .map((r) {
-                // Create a simple User object from the database user_name
                 final userName = r['user_name'] as String? ?? "Anonymous";
                 return Review(
                   id: r['id'],
@@ -136,8 +140,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               })
               .toList();
           
-          // Check if current user has already reviewed
-          _hasUserReviewed = rows.any((r) => r['user_name'] == _currentUserName);
+          // Check if current user has reviewed - now _currentUserName is guaranteed to be loaded
+          _hasUserReviewed = _currentUserName != "Guest" && 
+                             rows.any((r) => r['user_name'] == _currentUserName);
           
           _isLoadingReviews = false;
         });
@@ -151,8 +156,19 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
   Future<void> _addReview() async {
     if (_product == null) return;
-
-    // Check if user has already reviewed
+    
+    // Additional check for Guest users
+    if (_currentUserName == "Guest") {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please log in to add a review'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
     if (_hasUserReviewed) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -423,13 +439,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                               ],
                                             ),
                                             TextButton.icon(
-                                              onPressed: _hasUserReviewed ? null : _addReview,
+                                              onPressed: (_hasUserReviewed || _currentUserName == "Guest") ? null : _addReview,
                                               icon: Icon(
                                                 _hasUserReviewed ? Icons.check_circle : Icons.add, 
                                                 size: 18
                                               ),
                                               label: Text(_hasUserReviewed ? "Reviewed" : "Add"),
-                                              style: _hasUserReviewed ? TextButton.styleFrom(
+                                              style: (_hasUserReviewed || _currentUserName == "Guest") ? TextButton.styleFrom(
                                                 foregroundColor: colorScheme.onSurfaceVariant,
                                               ) : null,
                                             ),
@@ -952,5 +968,4 @@ class _ReviewBottomSheetState extends State<_ReviewBottomSheet> {
         ),
       ),
     );
-  }
-}
+  }}
