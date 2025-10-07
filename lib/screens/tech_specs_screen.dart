@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/specs_service.dart';
-import 'package:assignment1/providers/connectivity_provider.dart';
+
 
 class TechSpecsScreen extends StatefulWidget {
   const TechSpecsScreen({Key? key}) : super(key: key);
@@ -65,7 +65,6 @@ class _TechSpecsScreenState extends State<TechSpecsScreen> {
                           style: const TextStyle(fontWeight: FontWeight.bold)),
                       ...catSpecs.map((s) {
                         final val = s['val'];
-                        // val can be List or String
                         final valText = val is List ? val.join(', ') : val ?? '';
                         return Text('${s['key']}: $valText');
                       }),

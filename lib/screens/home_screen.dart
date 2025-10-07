@@ -83,7 +83,6 @@ class ElectronicsStoreState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ---------- Product Image ----------
             Expanded(
               flex: 3,
               child: Container(
@@ -130,7 +129,6 @@ class ElectronicsStoreState extends State<HomeScreen> {
                 ),
               ),
             ),
-            // ---------- Product Info ----------
             Expanded(
               flex: 2,
               child: Padding(
@@ -163,23 +161,31 @@ class ElectronicsStoreState extends State<HomeScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          product.discountPrice != null
-                              ? 'LKR ${product.discountPrice!.toStringAsFixed(2)}'
-                              : 'LKR ${product.price.toStringAsFixed(2)}',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF5A5CE6),
-                              ),
-                        ),
-                        if (product.discountPrice != null)
-                          Text(
-                            'LKR ${product.price.toStringAsFixed(2)}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  decoration: TextDecoration.lineThrough,
-                                  color: Colors.grey[500],
+                        Flexible(
+                          child: Text(
+                            product.discountPrice != null
+                                ? 'LKR ${product.discountPrice!.toStringAsFixed(2)}'
+                                : 'LKR ${product.price.toStringAsFixed(2)}',
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF5A5CE6),
                                 ),
+                            overflow: TextOverflow.ellipsis,
                           ),
+                        ),
+                        if (product.discountPrice != null) ...[
+                          SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'LKR ${product.price.toStringAsFixed(2)}',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    decoration: TextDecoration.lineThrough,
+                                    color: Colors.grey[500],
+                                  ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],
@@ -208,7 +214,6 @@ class ElectronicsStoreState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ---------- Banner ----------
                   Container(
                     height: 400,
                     width: double.infinity,
@@ -225,7 +230,6 @@ class ElectronicsStoreState extends State<HomeScreen> {
                   ),
                   SizedBox(height: 20),
 
-                  // ---------- Featured Products ----------
                   if (featuredProducts.isNotEmpty) ...[
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 16),
@@ -277,7 +281,7 @@ class ElectronicsStoreState extends State<HomeScreen> {
                   ],
                   SizedBox(height: 16),
 
-                  // ---------- Categories ----------
+
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Text(
@@ -308,7 +312,6 @@ class ElectronicsStoreState extends State<HomeScreen> {
                     backgroundColor: isDark ? Color(0xFF2D3748) : Color(0xFFfce4ec),
                   ),
 
-                  // ---------- Promo Section ----------
                   Container(
                     height: 200,
                     width: double.infinity,
@@ -352,8 +355,6 @@ class ElectronicsStoreState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-
-                  // ---------- Tech Specs Button ----------
                   Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Center(

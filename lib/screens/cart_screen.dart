@@ -179,7 +179,6 @@ class _CartScreenState extends State<CartScreen> {
                   ),
           ),
           const SizedBox(width: 12),
-          // Product Details
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -236,7 +235,6 @@ class _CartScreenState extends State<CartScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                // Quantity Controls and Stock Info
                 Row(
                   children: [
                     Container(

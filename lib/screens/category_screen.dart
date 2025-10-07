@@ -82,7 +82,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
         _priceRange = RangeValues(0, 0);
       }
 
-      // Extract unique brands from products
       final brandsMap = <int, String>{};
       for (var product in categoryProducts) {
         if (product.brandId != null && product.brandName != null) {
@@ -356,7 +355,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
                     style: TextStyle(fontWeight: FontWeight.w500),
                   ),
                   SizedBox(height: 4),
-                  Row(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'LKR ${(product.discountPrice ?? product.price).toStringAsFixed(2)}',
@@ -365,8 +365,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
                           color: Color(0xFF5A5CE6),
                         ),
                       ),
-                      if (product.discountPrice != null) ...[
-                        SizedBox(width: 8),
+                      if (product.discountPrice != null)
                         Text(
                           'LKR ${product.price.toStringAsFixed(2)}',
                           style: TextStyle(
@@ -375,7 +374,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
                             decoration: TextDecoration.lineThrough,
                           ),
                         ),
-                      ],
                     ],
                   ),
                 ],

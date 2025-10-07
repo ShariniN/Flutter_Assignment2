@@ -1,4 +1,5 @@
 import 'package:assignment1/screens/onboarding_screen.dart';
+import 'package:assignment1/screens/login.dart';
 import 'package:assignment1/services/api_service.dart';
 import 'package:assignment1/services/cart_manager.dart';
 import 'package:flutter/material.dart';
@@ -24,7 +25,7 @@ class MyApp extends StatelessWidget {
             final apiService = ApiService();
             final cartManager = CartManager(apiService);
             cartManager.loadCart().catchError((error) {
-              print('Cart load failed (user might not be logged in): $error');
+              print('Cart load failed: $error');
             });
             return cartManager;
           },
@@ -46,6 +47,9 @@ class MyApp extends StatelessWidget {
         ),
         themeMode: ThemeMode.system,
         home: OnboardingScreen(),
+        routes: {
+          '/login': (context) => AuthScreen(),
+        },
         debugShowCheckedModeBanner: false,
       ),
     );

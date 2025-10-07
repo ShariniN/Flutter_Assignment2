@@ -91,7 +91,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
           .map((r) => Review(
                 id: r['id'],
                 productId: r['product_id'],
-                userId: 0, // placeholder; replace with actual user ID
+                userId: 0, 
                 user: null,
                 comment: r['comment'],
                 rating: double.tryParse(r['rating'].toString()) ?? 0.0,

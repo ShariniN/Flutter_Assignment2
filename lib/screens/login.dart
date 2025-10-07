@@ -51,7 +51,6 @@ class _AuthScreenState extends State<AuthScreen> {
 
         _showMessage("Welcome back, ${user.name}!");
 
-        // Load cart after successful login
         if (mounted) {
           await Provider.of<CartManager>(context, listen: false).loadCart();
         }
@@ -85,7 +84,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
         _showMessage("Account created! Welcome, ${user.name}!");
 
-        // Load cart after successful registration
+
         if (mounted) {
           await Provider.of<CartManager>(context, listen: false).loadCart();
         }

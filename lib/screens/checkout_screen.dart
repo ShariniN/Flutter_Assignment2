@@ -467,7 +467,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
           }
         }
 
-        // Proceed with order
         print('Authentication successful - placing order');
         await Future.delayed(const Duration(seconds: 2));
         await _cartManager.clearCart();
