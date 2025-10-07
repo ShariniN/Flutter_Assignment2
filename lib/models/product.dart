@@ -86,24 +86,47 @@ class Product {
       if (value is int) return value == 1;
       if (value is String) {
         if (value.isEmpty) return false;
-        return value == '1' || value.toLowerCase() == 'true';
+        final lowerValue = value.toLowerCase().trim();
+        return lowerValue == '1' || lowerValue == 'true' || lowerValue == 'yes';
       }
       return false;
     } catch (e) {
-      print('Error converting to bool: $value, error: $e');
+      print('Error converting to bool: $value (${value.runtimeType}), error: $e');
       return false;
     }
   }
 
   static double _priceFromJson(dynamic value) {
-    if (value is String) return double.parse(value);
-    return (value as num).toDouble();
+    try {
+      if (value == null) return 0.0;
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is String) {
+        final parsed = double.tryParse(value);
+        return parsed ?? 0.0;
+      }
+      return 0.0;
+    } catch (e) {
+      print('Error parsing price: $value, error: $e');
+      return 0.0;
+    }
   }
 
   static double? _discountPriceFromJson(dynamic value) {
-    if (value == null) return null;
-    if (value is String) return double.parse(value);
-    return (value as num).toDouble();
+    try {
+      if (value == null) return null;
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is String) {
+        if (value.isEmpty) return null;
+        final parsed = double.tryParse(value);
+        return parsed;
+      }
+      return null;
+    } catch (e) {
+      print('Error parsing discount price: $value, error: $e');
+      return null;
+    }
   }
 
   static Map<String, dynamic>? _specificationsFromJson(dynamic value) {
@@ -117,7 +140,7 @@ class Product {
       }
       return null;
     } catch (e) {
-      print('Error converting specifications: $value, error: $e');
+      print('Error parsing specifications: $value, error: $e');
       return null;
     }
   }
@@ -126,11 +149,18 @@ class Product {
     try {
       if (value == null) return [];
       if (value is List) {
-        return value.map((e) => Map<String, dynamic>.from(e)).toList();
+        return value
+            .map((e) {
+              if (e is Map<String, dynamic>) return e;
+              if (e is Map) return Map<String, dynamic>.from(e);
+              return null;
+            })
+            .whereType<Map<String, dynamic>>()
+            .toList();
       }
       return [];
     } catch (e) {
-      print('Error converting reviews: $value, error: $e');
+      print('Error parsing reviews: $value, error: $e');
       return [];
     }
   }

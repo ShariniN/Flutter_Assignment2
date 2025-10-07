@@ -24,7 +24,7 @@ class Review {
   final String? createdAt;
 
   @JsonKey(name: 'image_path')
-  final String? imagePath;  // Add this field
+  final String? imagePath;
 
   Review({
     required this.id,
@@ -34,13 +34,23 @@ class Review {
     this.comment,
     required this.rating,
     this.createdAt,
-    this.imagePath,  // Add this parameter
+    this.imagePath,
   });
 
   static double _ratingFromJson(dynamic value) {
-    if (value == null) return 0.0;
-    if (value is String) return double.tryParse(value) ?? 0.0;
-    return (value as num).toDouble();
+    try {
+      if (value == null) return 0.0;
+      if (value is double) return value;
+      if (value is int) return value.toDouble();
+      if (value is String) {
+        if (value.isEmpty) return 0.0;
+        return double.tryParse(value) ?? 0.0;
+      }
+      return 0.0;
+    } catch (e) {
+      print('Error parsing rating: $value, error: $e');
+      return 0.0;
+    }
   }
 
   factory Review.fromJson(Map<String, dynamic> json) => _$ReviewFromJson(json);

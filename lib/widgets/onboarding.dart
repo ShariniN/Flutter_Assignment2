@@ -26,6 +26,10 @@ class OnboardingPage extends StatelessWidget {
     final spacingAfterIcon = isLandscape ? 20.0 : 50.0;
     final spacingAfterTitle = isLandscape ? 10.0 : 20.0;
     
+    final calculatedMinHeight = (mediaQuery.size.height - 
+                                 (mediaQuery.padding.top + mediaQuery.padding.bottom + 200))
+                                 .clamp(0.0, double.infinity);
+    
     return SingleChildScrollView(
       child: Padding(
         padding: EdgeInsets.symmetric(
@@ -34,8 +38,7 @@ class OnboardingPage extends StatelessWidget {
         ),
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            minHeight: mediaQuery.size.height - 
-                       (mediaQuery.padding.top + mediaQuery.padding.bottom + 200),
+            minHeight: calculatedMinHeight,
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
